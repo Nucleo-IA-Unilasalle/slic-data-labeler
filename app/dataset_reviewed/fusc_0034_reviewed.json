@@ -1,0 +1,37 @@
+{
+  "image_filename": "fusc_0034.png",
+  "reviewed_clusters": [
+    {
+      "cluster_id": 2,
+      "scores": {
+        "necrosis": 0.17,
+        "slough": 0.28621361741547013,
+        "red_tissue": 0.17
+      }
+    },
+    {
+      "cluster_id": 5,
+      "scores": {
+        "necrosis": 0.23,
+        "slough": 0.021259842519685043,
+        "red_tissue": 0.12
+      }
+    },
+    {
+      "cluster_id": 7,
+      "scores": {
+        "necrosis": 0.2,
+        "slough": 0.202727388806129,
+        "red_tissue": 0.21
+      }
+    },
+    {
+      "cluster_id": 10,
+      "scores": {
+        "necrosis": 0.18,
+        "slough": 0.19582152230971123,
+        "red_tissue": 0.23
+      }
+    }
+  ]
+}

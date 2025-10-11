@@ -1,0 +1,85 @@
+{
+  "image_filename": "wsnet_0451.png",
+  "reviewed_clusters": [
+    {
+      "cluster_id": 10,
+      "scores": {
+        "necrosis": 0.53,
+        "slough": 0.27999999999999997,
+        "red_tissue": 0.17788235294117646
+      }
+    },
+    {
+      "cluster_id": 13,
+      "scores": {
+        "necrosis": 0.49,
+        "slough": 0.29333333333333333,
+        "red_tissue": 0.11576470588235295
+      }
+    },
+    {
+      "cluster_id": 14,
+      "scores": {
+        "necrosis": 0.59,
+        "slough": 0.38,
+        "red_tissue": 0.21176470588235294
+      }
+    },
+    {
+      "cluster_id": 16,
+      "scores": {
+        "necrosis": 0.68,
+        "slough": 0.23,
+        "red_tissue": 0.13411764705882354
+      }
+    },
+    {
+      "cluster_id": 17,
+      "scores": {
+        "necrosis": 0.47,
+        "slough": 0.19,
+        "red_tissue": 0.14258823529411763
+      }
+    },
+    {
+      "cluster_id": 18,
+      "scores": {
+        "necrosis": 0.333224094117647,
+        "slough": 0.23,
+        "red_tissue": 0.2096470588235294
+      }
+    },
+    {
+      "cluster_id": 20,
+      "scores": {
+        "necrosis": 0.39,
+        "slough": 0.2,
+        "red_tissue": 0.14258823529411763
+      }
+    },
+    {
+      "cluster_id": 21,
+      "scores": {
+        "necrosis": 0.32,
+        "slough": 0,
+        "red_tissue": 0.21741176470588233
+      }
+    },
+    {
+      "cluster_id": 22,
+      "scores": {
+        "necrosis": 0.17482277647058822,
+        "slough": 0.03,
+        "red_tissue": 0.07
+      }
+    },
+    {
+      "cluster_id": 23,
+      "scores": {
+        "necrosis": 0.43,
+        "slough": 0.25,
+        "red_tissue": 0.24352941176470588
+      }
+    }
+  ]
+}

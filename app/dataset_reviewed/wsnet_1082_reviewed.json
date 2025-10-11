@@ -1,0 +1,37 @@
+{
+  "image_filename": "wsnet_1082.png",
+  "reviewed_clusters": [
+    {
+      "cluster_id": 0,
+      "scores": {
+        "necrosis": -0.005076705882352945,
+        "slough": 0.5063349593065573,
+        "red_tissue": 0.19
+      }
+    },
+    {
+      "cluster_id": 1,
+      "scores": {
+        "necrosis": 0.014305882352941173,
+        "slough": 0.43966477072718846,
+        "red_tissue": 0.22
+      }
+    },
+    {
+      "cluster_id": 22,
+      "scores": {
+        "necrosis": 0.36,
+        "slough": 0.34,
+        "red_tissue": 0.06
+      }
+    },
+    {
+      "cluster_id": 23,
+      "scores": {
+        "necrosis": -0.00832941176470588,
+        "slough": 0.447322569972871,
+        "red_tissue": 0.25
+      }
+    }
+  ]
+}

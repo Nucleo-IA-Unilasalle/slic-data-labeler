@@ -1,0 +1,45 @@
+{
+  "image_filename": "medetec_0318.png",
+  "reviewed_clusters": [
+    {
+      "cluster_id": 1,
+      "scores": {
+        "necrosis": 0,
+        "slough": 0.31831578947368383,
+        "red_tissue": 0.20842105263157887
+      }
+    },
+    {
+      "cluster_id": 2,
+      "scores": {
+        "necrosis": 0,
+        "slough": 0.24111627906976763,
+        "red_tissue": 0.19339534883720932
+      }
+    },
+    {
+      "cluster_id": 3,
+      "scores": {
+        "necrosis": 0,
+        "slough": 0.25920000000000004,
+        "red_tissue": 0.25095619183965645
+      }
+    },
+    {
+      "cluster_id": 5,
+      "scores": {
+        "necrosis": 0,
+        "slough": 0.2854285714285715,
+        "red_tissue": 0.28466709274976987
+      }
+    },
+    {
+      "cluster_id": 6,
+      "scores": {
+        "necrosis": 0,
+        "slough": 0.2399999999999999,
+        "red_tissue": 0.16499999999999979
+      }
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "image_filename": "fusc_0887.png",
+  "reviewed_clusters": [
+    {
+      "cluster_id": 0,
+      "scores": {
+        "necrosis": 0.79,
+        "slough": 0.37174181217094227,
+        "red_tissue": 0.23082352941176465
+      }
+    },
+    {
+      "cluster_id": 1,
+      "scores": {
+        "necrosis": 0.95,
+        "slough": 0.20908983967365521,
+        "red_tissue": 0.19638031074992635
+      }
+    },
+    {
+      "cluster_id": 3,
+      "scores": {
+        "necrosis": 0.8,
+        "slough": 0.22156299212598426,
+        "red_tissue": 0.20329411764705882
+      }
+    },
+    {
+      "cluster_id": 6,
+      "scores": {
+        "necrosis": 1,
+        "slough": 0.1491901012373453,
+        "red_tissue": 0.01821045096635648
+      }
+    },
+    {
+      "cluster_id": 7,
+      "scores": {
+        "necrosis": 1,
+        "slough": 0.0368503937007874,
+        "red_tissue": 0.21176470588235294
+      }
+    },
+    {
+      "cluster_id": 8,
+      "scores": {
+        "necrosis": 0.96,
+        "slough": 0.15546622461665977,
+        "red_tissue": 0.014087329992841804
+      }
+    },
+    {
+      "cluster_id": 10,
+      "scores": {
+        "necrosis": 1,
+        "slough": 0.23065215377489576,
+        "red_tissue": 0.23505882352941176
+      }
+    },
+    {
+      "cluster_id": 11,
+      "scores": {
+        "necrosis": 1,
+        "slough": 0.032755905511811026,
+        "red_tissue": 0.20329411764705882
+      }
+    },
+    {
+      "cluster_id": 13,
+      "scores": {
+        "necrosis": 1,
+        "slough": 0.16130158428991548,
+        "red_tissue": 0.18744688197397788
+      }
+    },
+    {
+      "cluster_id": 16,
+      "scores": {
+        "necrosis": 1,
+        "slough": 0.18782608695652184,
+        "red_tissue": 0.01695060844667144
+      }
+    },
+    {
+      "cluster_id": 17,
+      "scores": {
+        "necrosis": 1,
+        "slough": 0.2588608923884514,
+        "red_tissue": 0.20760672028295923
+      }
+    },
+    {
+      "cluster_id": 18,
+      "scores": {
+        "necrosis": 1,
+        "slough": 0.43963957548784655,
+        "red_tissue": 0.24352941176470588
+      }
+    }
+  ]
+}

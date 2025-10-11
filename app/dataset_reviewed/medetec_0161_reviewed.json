@@ -1,0 +1,29 @@
+{
+  "image_filename": "medetec_0161.png",
+  "reviewed_clusters": [
+    {
+      "cluster_id": 7,
+      "scores": {
+        "necrosis": 0.5,
+        "slough": 0.19535822139879572,
+        "red_tissue": 0.17
+      }
+    },
+    {
+      "cluster_id": 12,
+      "scores": {
+        "necrosis": 0.42,
+        "slough": 0.19330504863362669,
+        "red_tissue": 0.15
+      }
+    },
+    {
+      "cluster_id": 17,
+      "scores": {
+        "necrosis": 0.3,
+        "slough": 0.23647948124131543,
+        "red_tissue": 0.18
+      }
+    }
+  ]
+}
