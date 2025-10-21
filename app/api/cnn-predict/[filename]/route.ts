@@ -31,7 +31,7 @@ export async function GET(
     // Ensure cache directory exists
     try {
       await mkdir(cacheDir, { recursive: true });
-    } catch (error) {
+    } catch {
       // Directory might already exist, ignore error
     }
     
@@ -43,7 +43,7 @@ export async function GET(
       const cachedPredictions = JSON.parse(cachedContent);
       console.log(`Cache hit for ${filename}`);
       return NextResponse.json(cachedPredictions);
-    } catch (error) {
+    } catch {
       // Cache doesn't exist, continue to inference
       console.log(`Cache miss for ${filename}, running inference...`);
     }
@@ -52,7 +52,7 @@ export async function GET(
     const outputFilePath = join(tmpdir(), `cnn_output_${Date.now()}.json`);
     
     // Run Python inference script
-    const result = await new Promise<string>((resolve, reject) => {
+    await new Promise<string>((resolve, reject) => {
       const pythonProcess = spawn('py', [
         scriptPath,
         modelPath,
@@ -92,8 +92,8 @@ export async function GET(
     try {
       await writeFile(cacheFilePath, outputContent, 'utf-8');
       console.log(`Cached predictions for ${filename}`);
-    } catch (error) {
-      console.error('Failed to cache predictions:', error);
+    } catch {
+      console.error('Failed to cache predictions:', new Error('Could not write cache'));
       // Continue anyway, caching is not critical
     }
     
@@ -134,7 +134,7 @@ export async function DELETE(
       await unlink(cacheFilePath);
       console.log(`Deleted cache for ${filename}`);
       return NextResponse.json({ success: true, message: 'Cache cleared' });
-    } catch (error) {
+    } catch {
       // Cache file doesn't exist or couldn't be deleted
       return NextResponse.json({ success: true, message: 'No cache to clear' });
     }

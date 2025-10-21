@@ -14,13 +14,6 @@ interface WoundVisualizerProps {
   scale?: number;
 }
 
-// Tissue type colors for overlay (RGB)
-const TISSUE_COLORS: Record<string, { r: number; g: number; b: number }> = {
-  necrosis: { r: 0, g: 0, b: 0 },          // Black
-  slough: { r: 255, g: 255, b: 0 },        // Yellow
-  red_tissue: { r: 255, g: 0, b: 0 },      // Red
-};
-
 function bgrToRgb(bgr: number[]): { r: number; g: number; b: number } {
   return { r: bgr[2], g: bgr[1], b: bgr[0] };
 }

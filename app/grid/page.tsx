@@ -156,8 +156,6 @@ export default function GridPage() {
   };
 
   const totalPages = Math.ceil(dataFiles.length / ITEMS_PER_PAGE);
-  const startIdx = (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const endIdx = Math.min(currentPage * ITEMS_PER_PAGE, dataFiles.length);
 
   const handlePreviousPage = (): void => {
     if (currentPage > 1) {
@@ -368,7 +366,7 @@ function SampleCard({ sample }: { sample: SampleThumbnail }) {
     }
 
     loadOriginalImage();
-  }, [sample.woundData]);
+  }, [sample]);
 
   // Generate segmented image on hover
   useEffect(() => {
@@ -445,7 +443,7 @@ function SampleCard({ sample }: { sample: SampleThumbnail }) {
 
     ctx.putImageData(currentImageData, 0, 0);
     setSegmentedImgSrc(canvas.toDataURL());
-  }, [sample.woundData, isHovered, segmentedImgSrc]);
+  }, [sample, isHovered, segmentedImgSrc]);
 
   const displayName = sample.filename.replace('.json', '');
   const currentImgSrc = isHovered && segmentedImgSrc ? segmentedImgSrc : originalImgSrc;

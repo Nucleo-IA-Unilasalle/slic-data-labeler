@@ -10,7 +10,7 @@ export async function DELETE() {
     let files: string[];
     try {
       files = await readdir(cacheDir);
-    } catch (error) {
+    } catch {
       // Directory doesn't exist, nothing to clear
       return NextResponse.json({ 
         success: true, 

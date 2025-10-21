@@ -22,7 +22,6 @@ type TissueType = 'granulação' | 'esfacelo' | 'necrotic' | 'epitelial';
 export default function MinimalisticSupervisionPage() {
   const [username, setUsername] = useState<string | null>(null);
   const [usernameInput, setUsernameInput] = useState<string>('');
-  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(false);
   const [imageInfo, setImageInfo] = useState<ImageInfo | null>(null);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [imageSrc, setImageSrc] = useState<string>('');
@@ -44,6 +43,7 @@ export default function MinimalisticSupervisionPage() {
     if (username) {
       fetchImageList();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username]);
 
   const handleSetUsername = (): void => {
@@ -201,11 +201,11 @@ export default function MinimalisticSupervisionPage() {
             </div>
             <Button
               onClick={handleSetUsername}
-              disabled={isAuthLoading || !usernameInput.trim()}
+              disabled={!usernameInput.trim()}
               className="w-full"
               size="lg"
             >
-              {isAuthLoading ? 'Carregando...' : 'Começar'}
+              Começar
             </Button>
           </CardContent>
         </Card>

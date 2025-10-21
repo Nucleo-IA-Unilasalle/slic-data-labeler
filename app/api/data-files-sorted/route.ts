@@ -14,7 +14,7 @@ interface FileWithStats {
 }
 
 // In-memory cache for sorted results
-let sortCache: {
+const sortCache: {
   [key: string]: {
     files: string[];
     stats: FileWithStats[];
