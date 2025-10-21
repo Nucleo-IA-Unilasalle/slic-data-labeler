@@ -3,7 +3,7 @@
 import { WoundVisualizer } from '@/components/wound-visualizer';
 import { WoundVisualizerCNN } from '@/components/wound-visualizer-cnn';
 import type { WoundData } from '@/lib/types/wound-data';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import {
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-export default function Home() {
+function HomeContent() {
   const searchParams = useSearchParams();
   const [dataFiles, setDataFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<string>('');
@@ -383,3 +383,13 @@ export default function Home() {
     </div>
   );
 }
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen p-8"><div className="flex items-center justify-center"><p className="text-muted-foreground">Loading...</p></div></div>}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+export const dynamic = 'force-dynamic';
