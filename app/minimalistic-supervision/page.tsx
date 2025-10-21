@@ -224,27 +224,26 @@ export default function MinimalisticSupervisionPage() {
   return (
     <div className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto space-y-6">
-        <header className="flex items-center justify-between">
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-0">
           <div>
-            <h1 className="text-4xl font-bold">Classificação Humana</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl sm:text-4xl font-bold">Classificação Humana</h1>
+            <p className="text-muted-foreground text-sm sm:text-base">
               Classifique imagens de feridas por nível de exudato e tipo de tecido
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2 sm:mt-0">
+            <Badge variant="secondary" className="self-start sm:self-auto">
               {username}
             </Badge>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="w-full sm:w-auto"
+            >
               <LogOut className="h-4 w-4 mr-2" />
               Sair
             </Button>
-            <Link href="/">
-              <Button variant="outline" size="sm">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Voltar
-              </Button>
-            </Link>
           </div>
         </header>
 
@@ -306,7 +305,7 @@ export default function MinimalisticSupervisionPage() {
               {/* Exudate Level Selection */}
               <div className="space-y-3">
                 <Label className="text-base font-semibold">Quantidade de Exudado</Label>
-                <div className="flex gap-3">
+                <div className="flex flex-col xs:flex-row gap-2 xs:gap-3">
                   {(['none', 'low', 'medium', 'high'] as ExudateLevel[]).map((level) => {
                     const labelMap: Record<ExudateLevel, string> = {
                       none: 'Nenhum',
@@ -319,7 +318,7 @@ export default function MinimalisticSupervisionPage() {
                         key={level}
                         variant={selectedExudate === level ? 'default' : 'outline'}
                         onClick={() => setSelectedExudate(level)}
-                        className="flex-1"
+                        className="flex-1 min-w-[92px] sm:min-w-0 text-xs sm:text-sm px-2 py-2"
                       >
                         {labelMap[level]}
                       </Button>
@@ -331,7 +330,7 @@ export default function MinimalisticSupervisionPage() {
               {/* Tissue Type Selection */}
               <div className="space-y-3">
                 <Label className="text-base font-semibold">Tipo de Tecido</Label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   {(['granulação', 'esfacelo', 'necrotic', 'epitelial'] as TissueType[]).map((type) => {
                     const labelMap: Record<TissueType, string> = {
                       'granulação': 'Granulação',
@@ -344,7 +343,7 @@ export default function MinimalisticSupervisionPage() {
                         key={type}
                         variant={selectedTissue === type ? 'default' : 'outline'}
                         onClick={() => setSelectedTissue(type)}
-                        className="w-full"
+                        className="w-full text-xs sm:text-sm py-2"
                       >
                         {labelMap[type]}
                       </Button>
