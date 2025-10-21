@@ -75,7 +75,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 │   │   └── original-image/      # Original image endpoints
 │   ├── dataset/                  # SLIC-processed wound data
 │   ├── dataset_reviewed/         # Human-reviewed corrections
-│   ├── train_images/             # Original training images
+│   ├── images/                   # Original training images
 │   ├── grid/                     # Grid view page
 │   └── tissue_classification_model.pth  # Trained PyTorch model
 ├── components/
