@@ -16,7 +16,7 @@ export async function GET(
       );
     }
     
-    const imagePath = join(process.cwd(), 'app', 'train_images', filename);
+    const imagePath = join(process.cwd(), 'app', 'images', filename);
     const fileBuffer = await readFile(imagePath);
     const base64 = fileBuffer.toString('base64');
     
