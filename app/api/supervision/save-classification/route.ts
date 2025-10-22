@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     
     // Log the classification with username
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] Classification saved by ${body.username}: ${body.image_name} (exudato: ${body.qtd_exudado}, tissue: ${body.tissue_type})`);
+    console.log(`[${timestamp}] Classification saved by ${body.username}: ${body.image_name} (Exsudato: ${body.qtd_exudado}, tissue: ${body.tissue_type})`);
     
     return NextResponse.json({ 
       success: true,

@@ -131,7 +131,7 @@ export default function MinimalisticSupervisionPage() {
 
   const handleSaveClassification = async (): Promise<void> => {
     if (!currentImage || !selectedExudate || !selectedTissue || !username) {
-      toast.error('Por favor, selecione nível de exudato e tipo de tecido');
+      toast.error('Por favor, selecione nível de Exsudato e tipo de tecido');
       return;
     }
     
@@ -228,7 +228,7 @@ export default function MinimalisticSupervisionPage() {
           <div>
             <h1 className="text-2xl sm:text-4xl font-bold">Classificação Humana</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
-              Classifique imagens de feridas por nível de exudato e tipo de tecido
+              Classifique imagens de feridas por nível de exsudato e tipo de tecido
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2 sm:mt-0">
@@ -304,7 +304,7 @@ export default function MinimalisticSupervisionPage() {
 
               {/* Exudate Level Selection */}
               <div className="space-y-3">
-                <Label className="text-base font-semibold">Quantidade de Exudado</Label>
+                <Label className="text-base font-semibold">Quantidade de Exsudato</Label>
                 <div className="flex flex-col xs:flex-row gap-2 xs:gap-3">
                   {(['none', 'low', 'medium', 'high'] as ExudateLevel[]).map((level) => {
                     const labelMap: Record<ExudateLevel, string> = {
