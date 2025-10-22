@@ -2,11 +2,9 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-interface ClassificationRequest {
+interface SkipImageRequest {
   username: string;
   image_name: string;
-  qtd_exudado: 'none' | 'low' | 'medium' | 'high';
-  tissue_type: 'granulação' | 'esfacelo' | 'necrotic' | 'epitelial';
   obs?: string | null;
 }
 
@@ -36,9 +34,9 @@ async function createSupabaseClient() {
 
 export async function POST(request: Request) {
   try {
-    const body: ClassificationRequest = await request.json();
+    const body: SkipImageRequest = await request.json();
     
-    if (!body.username || !body.image_name || !body.qtd_exudado || !body.tissue_type) {
+    if (!body.username || !body.image_name) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -47,8 +45,8 @@ export async function POST(request: Request) {
     
     const supabase = await createSupabaseClient();
     
-    // Check if image is already classified
-    const { data: existingClassification, error: queryError } = await supabase
+    // Check if image is already processed
+    const { data: existingRecord, error: queryError } = await supabase
       .from('human_feedback_tissue')
       .select('id')
       .eq('image_name', body.image_name)
@@ -56,46 +54,46 @@ export async function POST(request: Request) {
     
     if (queryError && queryError.code !== 'PGRST116') {
       // PGRST116 is "no rows" error, which is expected
-      throw new Error(`Failed to check existing classification: ${queryError.message}`);
+      throw new Error(`Failed to check existing record: ${queryError.message}`);
     }
     
-    if (existingClassification) {
+    if (existingRecord) {
       return NextResponse.json(
-        { error: 'Image already classified' },
+        { error: 'Image already processed' },
         { status: 409 }
       );
     }
     
-    // Insert into Supabase
+    // Insert skip record into Supabase with skipped=true and other fields null
     const { error: insertError } = await supabase
       .from('human_feedback_tissue')
       .insert({
         user: body.username,
         image_name: body.image_name,
-        qtd_exudado: body.qtd_exudado,
-        tissue_type: body.tissue_type,
+        skipped: true,
+        qtd_exudado: null,
+        tissue_type: null,
         obs: body.obs || null,
       });
     
     if (insertError) {
       console.error('Supabase insert error:', insertError);
-      throw new Error(`Failed to save classification: ${insertError.message}`);
+      throw new Error(`Failed to save skip record: ${insertError.message}`);
     }
     
-    // Log the classification with username
+    // Log the skip with username
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] Classification saved by ${body.username}: ${body.image_name} (Exsudato: ${body.qtd_exudado}, tissue: ${body.tissue_type})`);
+    console.log(`[${timestamp}] Image skipped by ${body.username}: ${body.image_name}`);
     
     return NextResponse.json({ 
       success: true,
-      message: 'Classification saved successfully'
+      message: 'Image skipped successfully'
     });
   } catch (error) {
-    console.error('Error saving classification:', error);
+    console.error('Error skipping image:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to save classification' },
+      { error: error instanceof Error ? error.message : 'Failed to skip image' },
       { status: 500 }
     );
   }
 }
-
