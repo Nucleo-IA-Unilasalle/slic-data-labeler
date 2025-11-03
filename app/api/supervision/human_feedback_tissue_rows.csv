@@ -1,0 +1,146 @@
+id,created_at,user,image_name,qtd_exudado,tissue_type,obs,skipped
+18,2025-10-23 00:04:29.148252+00,rodrigo.plentz,fusc_0195.png,high,esfacelo,,false
+19,2025-10-23 00:05:03.512462+00,rodrigo.plentz,fusc_0078.png,low,granulação,,false
+20,2025-10-23 00:06:01.403724+00,rodrigo.plentz,fusc_0321.png,none,epitelial,,false
+21,2025-10-23 00:06:37.558183+00,rodrigo.plentz,fusc_0283.png,low,granulação,,false
+22,2025-10-28 18:47:10.396493+00,Isabela Zucchi,fusc_0268.png,medium,granulação,,false
+23,2025-10-28 18:47:36.889002+00,Isabela Zucchi,fusc_0255.png,low,granulação,,false
+24,2025-10-28 18:52:03.374982+00,Isabela Zucchi,fusc_0133.png,high,esfacelo,,false
+25,2025-10-28 18:52:25.969849+00,Isabela Zucchi,fusc_0185.png,medium,esfacelo,,false
+26,2025-10-29 12:34:39.463748+00,rodrigo.plentz,fusc_0254.png,medium,granulação,,false
+27,2025-10-29 12:36:05.3913+00,rodrigo.plentz,fusc_0421.png,low,epitelial,,false
+28,2025-10-29 12:36:50.389042+00,rodrigo.plentz,fusc_0212.png,none,epitelial,,false
+29,2025-10-29 12:39:21.427248+00,Isabela Zucchi,fusc_0162.png,none,granulação,,false
+30,2025-10-29 12:40:13.355691+00,Isabela Zucchi,fusc_0328.png,none,granulação,,false
+31,2025-10-29 12:40:42.705381+00,Isabela Zucchi,fusc_0204.png,high,esfacelo,,false
+32,2025-10-29 12:41:10.712913+00,Isabela Zucchi,fusc_0226.png,high,esfacelo,,false
+33,2025-10-29 12:41:41.428574+00,Isabela Zucchi,fusc_0061.png,low,granulação,,false
+34,2025-10-29 12:43:56.95272+00,rodrigo.plentz,fusc_0123.png,none,epitelial,,false
+35,2025-10-29 12:44:26.973186+00,rodrigo.plentz,fusc_0338.png,none,epitelial,,false
+36,2025-10-29 12:48:53.343422+00,rodrigo.plentz,fusc_0104.png,low,granulação,,false
+37,2025-10-29 12:51:29.324684+00,rodrigo.plentz,fusc_0189.png,medium,esfacelo,,false
+38,2025-10-29 13:19:19.601009+00,rodrigo.plentz,fusc_0341.png,low,esfacelo,,false
+39,2025-10-29 13:20:40.957974+00,rodrigo.plentz,fusc_0411.png,medium,esfacelo,,false
+40,2025-10-29 13:24:27.618012+00,rodrigo.plentz,fusc_0220.png,low,granulação,,false
+41,2025-10-29 13:26:35.14781+00,rodrigo.plentz,fusc_0137.png,medium,necrotic,,false
+42,2025-10-29 13:27:28.782146+00,rodrigo.plentz,fusc_0183.png,low,necrotic,,false
+43,2025-10-29 13:28:50.4803+00,rodrigo.plentz,fusc_0207.png,high,esfacelo,,false
+44,2025-10-29 13:29:48.481947+00,rodrigo.plentz,fusc_0228.png,medium,granulação,,false
+45,2025-10-30 07:59:29.977679+00,rodrigo.plentz,fusc_0394.png,low,necrotic,"Devido à presença de envolvimento profundo e, mais importante, a necrose aparente na ponta do hálux, a classificação mais grave e apropriada é o Grau 4 (Gangrena localizada).O leito da ferida é predominantemente de cor vermelha ou rosa, com aspecto granular e úmido. Este é o tecido de granulação. Há apenas pequenas áreas amareladas (esfacelo) dispersas",false
+46,2025-10-30 08:00:55.264352+00,rodrigo.plentz,fusc_0118.png,medium,esfacelo,"A pele circundante está eritematosa (vermelhidão) e edemaciada (inchaço), o que é um sinal clínico de infecção local ou inflamação",false
+47,2025-10-30 08:03:13.675167+00,rodrigo.plentz,fusc_0269.png,low,necrotic,"A pele circundante está avermelhada e edemaciada, o que sugere pressão prolongada e inflamação",false
+48,2025-10-30 08:06:43.600402+00,rodrigo.plentz,fusc_0034.png,medium,necrotic,"Ppresença de tecido necrótico e o tamanho da lesão.
+
+A presença de tunelização/sondagem positiva e os múltiplos orifícios (fístulas?) confirmam a natureza complexa e profunda desta úlcera, consistente com a classificação Wagner Grau 3.",false
+49,2025-10-30 08:08:16.08486+00,rodrigo.plentz,fusc_0265.png,high,esfacelo,"Presença de úlcera profunda com sinais de infecção avançada, incluindo abscesso, osteomielite ou celulite.",false
+50,2025-10-30 08:10:15.322273+00,rodrigo.plentz,fusc_0358.png,medium,necrotic,,false
+51,2025-10-30 08:11:10.929377+00,rodrigo.plentz,fusc_0381.png,medium,esfacelo,,false
+52,2025-10-30 08:11:59.533812+00,rodrigo.plentz,fusc_0383.png,medium,necrotic,,false
+53,2025-10-30 08:13:07.220631+00,rodrigo.plentz,fusc_0017.png,low,granulação,,false
+54,2025-10-30 08:14:01.382746+00,rodrigo.plentz,fusc_0076.png,medium,necrotic,,false
+55,2025-10-30 08:17:14.038189+00,rodrigo.plentz,fusc_0309.png,medium,esfacelo,,false
+56,2025-10-30 08:18:23.777486+00,rodrigo.plentz,fusc_0191.png,low,granulação,,false
+57,2025-10-30 08:20:54.216719+00,rodrigo.plentz,fusc_0414.png,medium,granulação,,false
+58,2025-10-30 08:21:56.46847+00,rodrigo.plentz,fusc_0423.png,medium,esfacelo,,false
+59,2025-10-30 08:22:57.465123+00,rodrigo.plentz,fusc_0020.png,medium,necrotic,,false
+60,2025-10-30 08:24:09.05031+00,rodrigo.plentz,fusc_0045.png,medium,esfacelo,,false
+61,2025-10-30 08:25:16.213561+00,rodrigo.plentz,fusc_0294.png,low,necrotic,,false
+62,2025-10-30 08:26:17.262276+00,rodrigo.plentz,fusc_0075.png,medium,necrotic,,false
+63,2025-10-30 08:27:13.830522+00,rodrigo.plentz,fusc_0400.png,low,granulação,,false
+64,2025-10-30 08:28:55.70109+00,rodrigo.plentz,fusc_0186.png,medium,granulação,O tecido de granulação predominante é um sinal positivo de que a ferida está em processo de cicatrização ativo,false
+65,2025-10-30 08:30:40.938594+00,rodrigo.plentz,fusc_0395.png,medium,esfacelo,"A úlcera principal tem um centro de tecido de granulação (vermelho) , mas está circundado por anéis de tecido desvitalizado (esfacelo). O tecido de granulação é o mais central e viável, mas a presença de esfacelo pode ser o tipo predominante em termos de área. Vou considerar o tecido de granulação como predominante",false
+66,2025-10-30 08:33:29.751467+00,rodrigo.plentz,fusc_0159.png,medium,granulação,,false
+67,2025-10-30 08:35:34.14729+00,rodrigo.plentz,fusc_0173.png,medium,esfacelo,,false
+68,2025-10-30 08:36:23.343279+00,rodrigo.plentz,fusc_0141.png,low,necrotic,,false
+69,2025-10-30 08:38:13.429044+00,rodrigo.plentz,fusc_0274.png,medium,granulação,"A úlcera superior tem tecido de granulação (vermelho). O tecido circundante é esfacelo (amarelado/esbranquiçado) e o leito da úlcera inferior é misto. Como o tecido de granulação está presente na úlcera mais limpa, e o objetivo é a cicatrização, consideramos o tecido que predomina na área de interesse, que é o tecido misto. Consideramos o tecido de granulação por ser o tecido mais promissor, mas a presença de esfacelo extenso pode levar a uma pontuação mais alta.",false
+70,2025-10-30 08:40:26.659586+00,rodrigo.plentz,fusc_0354.png,low,granulação,"O leito de ambas as feridas é predominantemente de cor vermelha e granular. Este é o tecido de granulação. A úlcera lateral tem um pequeno anel de tecido amarelado (esfacelo) nas bordas, mas o granulação é o tecido principal",false
+71,2025-10-30 08:41:33.576071+00,rodrigo.plentz,fusc_0416.png,low,granulação,"O leito da ferida é predominantemente de cor vermelha e granular. Este é o tecido de granulação. Há um anel de tecido amarelado (esfacelo) nas bordas periféricas, mas o granulação é o tecido principal.",false
+72,2025-10-30 08:43:27.008094+00,rodrigo.plentz,fusc_0088.png,medium,necrotic,,false
+73,2025-10-30 08:44:21.305016+00,rodrigo.plentz,fusc_0048.png,medium,esfacelo,,false
+74,2025-10-30 08:45:11.725465+00,rodrigo.plentz,fusc_0337.png,medium,esfacelo,,false
+75,2025-10-30 08:46:09.228716+00,rodrigo.plentz,fusc_0002.png,medium,granulação,,false
+76,2025-10-30 08:47:21.910433+00,rodrigo.plentz,fusc_0384.png,medium,granulação,"O leito da ferida apresenta uma mistura: há tecido de granulação (vermelho/rosa) no centro, mas está circundado e parcialmente coberto por material amarelado/esbranquiçado (esfacelo). O tecido de granulação parece ser o mais predominante no leito central.",false
+77,2025-10-30 08:48:19.296263+00,rodrigo.plentz,fusc_0219.png,medium,esfacelo,,false
+78,2025-10-30 08:50:52.912356+00,rodrigo.plentz,fusc_0153.png,low,necrotic,,false
+79,2025-10-30 08:52:00.674256+00,rodrigo.plentz,fusc_0108.png,medium,granulação,,false
+80,2025-10-30 08:52:57.356171+00,rodrigo.plentz,fusc_0033.png,medium,esfacelo,,false
+81,2025-10-30 08:55:21.524719+00,rodrigo.plentz,fusc_0402.png,medium,necrotic,,false
+82,2025-10-30 08:57:29.63878+00,rodrigo.plentz,fusc_0003.png,medium,esfacelo,,false
+83,2025-10-30 08:58:58.42608+00,rodrigo.plentz,fusc_0057.png,medium,esfacelo,,false
+84,2025-10-30 08:59:36.912793+00,rodrigo.plentz,fusc_0389.png,low,necrotic,,false
+85,2025-10-30 09:01:48.970241+00,rodrigo.plentz,fusc_0062.png,low,necrotic,,false
+86,2025-10-30 09:03:05.51142+00,rodrigo.plentz,fusc_0198.png,medium,necrotic,,false
+87,2025-10-30 09:04:20.069372+00,rodrigo.plentz,fusc_0249.png,low,necrotic,,false
+88,2025-10-30 09:13:09.328108+00,rodrigo.plentz,fusc_0398.png,low,necrotic,,false
+89,2025-10-30 09:14:13.648804+00,rodrigo.plentz,fusc_0245.png,low,granulação,,false
+90,2025-10-30 09:15:53.718724+00,rodrigo.plentz,fusc_0059.png,medium,esfacelo,,false
+91,2025-10-30 09:17:10.279892+00,rodrigo.plentz,fusc_0413.png,medium,esfacelo,,false
+92,2025-10-30 09:18:39.412459+00,rodrigo.plentz,fusc_0077.png,low,granulação,,false
+93,2025-10-30 09:19:55.855857+00,rodrigo.plentz,fusc_0180.png,medium,necrotic,,false
+94,2025-10-30 09:21:34.398757+00,rodrigo.plentz,fusc_0327.png,low,granulação,"O leito da ferida é predominantemente de cor vermelha e granular. Este é o tecido de granulação. Há um anel de tecido amarelado (esfacelo) na periferia, mas o granulação é o tecido principal.",false
+95,2025-10-30 09:23:40.809111+00,rodrigo.plentz,fusc_0109.png,medium,esfacelo,,false
+96,2025-10-30 09:24:48.17117+00,rodrigo.plentz,fusc_0240.png,medium,granulação,,false
+97,2025-10-30 09:25:59.094394+00,rodrigo.plentz,fusc_0165.png,low,granulação,,false
+98,2025-10-30 09:27:16.021307+00,rodrigo.plentz,fusc_0044.png,low,necrotic,,false
+99,2025-10-30 09:28:26.522375+00,rodrigo.plentz,fusc_0346.png,medium,granulação,,false
+100,2025-10-30 09:28:44.56278+00,rodrigo.plentz,fusc_0083.png,low,epitelial,,false
+101,2025-10-30 09:28:59.143108+00,rodrigo.plentz,fusc_0242.png,low,esfacelo,,false
+102,2025-10-30 09:29:16.283811+00,rodrigo.plentz,fusc_0116.png,medium,necrotic,,false
+103,2025-10-30 09:31:26.52314+00,rodrigo.plentz,fusc_0364.png,medium,necrotic,,false
+104,2025-10-30 09:32:26.769467+00,rodrigo.plentz,fusc_0235.png,medium,esfacelo,,false
+105,2025-10-30 09:35:00.803109+00,rodrigo.plentz,fusc_0318.png,low,necrotic,,false
+106,2025-10-30 09:35:56.950246+00,rodrigo.plentz,fusc_0405.png,low,granulação,,false
+107,2025-10-30 09:37:03.351508+00,rodrigo.plentz,fusc_0089.png,medium,esfacelo,,false
+108,2025-10-30 09:38:40.856261+00,rodrigo.plentz,fusc_0424.png,low,necrotic,,false
+109,2025-10-30 09:38:58.133171+00,rodrigo.plentz,fusc_0199.png,low,granulação,,false
+110,2025-10-30 09:41:30.684589+00,rodrigo.plentz,fusc_0343.png,medium,necrotic,,false
+111,2025-10-30 09:42:44.369504+00,rodrigo.plentz,fusc_0342.png,low,necrotic,,false
+112,2025-10-30 09:44:14.905042+00,rodrigo.plentz,fusc_0115.png,medium,esfacelo,,false
+113,2025-10-30 09:45:42.307222+00,rodrigo.plentz,fusc_0426.png,medium,esfacelo,,false
+114,2025-10-30 09:48:27.346825+00,rodrigo.plentz,fusc_0376.png,low,granulação,,false
+115,2025-10-30 09:48:43.182003+00,rodrigo.plentz,fusc_0399.png,low,granulação,,false
+116,2025-10-30 09:48:59.502181+00,rodrigo.plentz,fusc_0064.png,medium,necrotic,,false
+117,2025-10-30 09:49:51.57557+00,rodrigo.plentz,fusc_0214.png,low,esfacelo,,false
+118,2025-10-30 09:50:05.760179+00,rodrigo.plentz,fusc_0371.png,low,granulação,,false
+119,2025-10-30 09:50:22.502131+00,rodrigo.plentz,fusc_0154.png,low,epitelial,,false
+120,2025-10-30 09:50:50.903835+00,rodrigo.plentz,fusc_0126.png,medium,necrotic,,false
+121,2025-10-30 09:51:31.085603+00,rodrigo.plentz,fusc_0312.png,low,esfacelo,,false
+122,2025-10-30 09:51:52.991092+00,rodrigo.plentz,fusc_0289.png,low,necrotic,,false
+123,2025-10-30 09:52:10.314004+00,rodrigo.plentz,fusc_0043.png,low,necrotic,,false
+124,2025-10-30 09:53:41.350132+00,rodrigo.plentz,fusc_0350.png,medium,granulação,,false
+125,2025-10-30 09:55:37.607436+00,rodrigo.plentz,fusc_0054.png,medium,granulação,,false
+126,2025-10-30 09:55:54.043137+00,rodrigo.plentz,fusc_0081.png,medium,necrotic,,false
+127,2025-10-30 09:57:46.019558+00,rodrigo.plentz,fusc_0143.png,low,granulação,,false
+128,2025-10-30 09:58:34.290986+00,rodrigo.plentz,fusc_0146.png,low,granulação,,false
+129,2025-10-30 10:00:25.825859+00,rodrigo.plentz,fusc_0117.png,high,esfacelo,,false
+130,2025-10-30 10:01:53.988734+00,rodrigo.plentz,fusc_0300.png,low,granulação,,false
+131,2025-10-30 10:03:21.785774+00,rodrigo.plentz,fusc_0096.png,low,granulação,,false
+132,2025-10-30 10:04:41.042965+00,rodrigo.plentz,fusc_0345.png,low,granulação,,false
+133,2025-10-30 10:11:04.960538+00,rodrigo.plentz,fusc_0006.png,medium,esfacelo,,false
+134,2025-10-30 10:12:46.935675+00,rodrigo.plentz,fusc_0170.png,low,granulação,,false
+135,2025-10-30 10:14:07.020014+00,rodrigo.plentz,fusc_0042.png,low,necrotic,,false
+136,2025-10-30 10:15:48.966226+00,rodrigo.plentz,fusc_0182.png,medium,granulação,,false
+137,2025-10-30 15:37:52.917563+00,rodrigo.plentz,fusc_0150.png,medium,esfacelo,,false
+138,2025-10-30 15:40:32.51138+00,rodrigo.plentz,fusc_0145.png,low,granulação,,false
+139,2025-10-30 15:41:56.140402+00,rodrigo.plentz,fusc_0313.png,low,granulação,,false
+140,2025-10-30 15:43:07.761148+00,rodrigo.plentz,fusc_0388.png,low,granulação,,false
+141,2025-10-30 16:21:29.268206+00,rodrigo.plentz,fusc_0124.png,medium,esfacelo,,false
+142,2025-10-30 19:54:42.067376+00,rodrigo.plentz,fusc_0031.png,medium,esfacelo,,false
+143,2025-10-30 20:04:37.222978+00,rodrigo.plentz,fusc_0419.png,low,granulação,,false
+144,2025-10-30 20:04:54.597299+00,rodrigo.plentz,fusc_0310.png,low,granulação,,false
+145,2025-10-30 20:12:36.33648+00,rodrigo.plentz,fusc_0192.png,medium,granulação,,false
+146,2025-10-30 20:14:38.211129+00,rodrigo.plentz,fusc_0080.png,low,granulação,,false
+147,2025-10-30 20:35:54.795344+00,rodrigo.plentz,fusc_0221.png,low,granulação,,false
+148,2025-10-30 23:03:29.302852+00,rodrigo.plentz,fusc_0032.png,medium,esfacelo,,false
+149,2025-10-31 09:11:11.296506+00,rodrigo.plentz,fusc_0369.png,none,granulação,,false
+150,2025-10-31 09:11:28.797871+00,rodrigo.plentz,fusc_0260.png,high,necrotic,,false
+151,2025-10-31 09:13:25.135738+00,rodrigo.plentz,fusc_0158.png,low,granulação,,false
+152,2025-10-31 09:17:17.522306+00,rodrigo.plentz,fusc_0261.png,medium,esfacelo,,false
+153,2025-10-31 09:18:30.857522+00,rodrigo.plentz,fusc_0380.png,low,necrotic,,false
+154,2025-10-31 09:19:55.888413+00,rodrigo.plentz,fusc_0167.png,medium,granulação,,false
+155,2025-10-31 09:21:42.400687+00,rodrigo.plentz,fusc_0174.png,low,granulação,,false
+156,2025-10-31 09:23:25.458793+00,rodrigo.plentz,fusc_0151.png,medium,necrotic,,false
+157,2025-10-31 09:28:16.505697+00,rodrigo.plentz,fusc_0039.png,high,necrotic,,false
+158,2025-10-31 09:28:37.817747+00,rodrigo.plentz,fusc_0094.png,medium,esfacelo,,false
+159,2025-10-31 09:29:10.571741+00,rodrigo.plentz,fusc_0340.png,medium,esfacelo,,false
+160,2025-10-31 09:29:40.748874+00,rodrigo.plentz,fusc_0193.png,medium,esfacelo,,false
