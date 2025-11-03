@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ArrowLeft, Shuffle, LogOut } from 'lucide-react';
 import Link from 'next/link';
+import { Textarea } from '@/components/ui/textarea';
 
 interface ImageInfo {
   unclassifiedImages: string[];
@@ -27,8 +28,10 @@ export default function MinimalisticSupervisionPage() {
   const [imageSrc, setImageSrc] = useState<string>('');
   const [selectedExudate, setSelectedExudate] = useState<ExudateLevel | null>(null);
   const [selectedTissue, setSelectedTissue] = useState<TissueType | null>(null);
+  const [observation, setObservation] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isImageModalOpen, setIsImageModalOpen] = useState<boolean>(false);
 
   // Check username on mount
   useEffect(() => {
@@ -105,6 +108,7 @@ export default function MinimalisticSupervisionPage() {
     setCurrentImage(selectedImage);
     setSelectedExudate(null);
     setSelectedTissue(null);
+    setObservation('');
     
     // Load image
     loadImage(selectedImage);
@@ -148,6 +152,7 @@ export default function MinimalisticSupervisionPage() {
           image_name: currentImage,
           qtd_exudado: selectedExudate,
           tissue_type: selectedTissue,
+          obs: observation.trim() || null,
         }),
       });
       
@@ -169,9 +174,38 @@ export default function MinimalisticSupervisionPage() {
     }
   };
 
-  const handleSkip = (): void => {
-    if (imageInfo) {
-      loadRandomImage(imageInfo.unclassifiedImages);
+  const handleSkip = async (): Promise<void> => {
+    if (!currentImage || !username) {
+      toast.error('Por favor, selecione uma imagem para pular');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const response = await fetch('/api/supervision/skip-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: username,
+          image_name: currentImage,
+          obs: observation.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Falha ao pular imagem');
+      }
+
+      toast.success('Imagem pulada com sucesso!');
+      await fetchImageList();
+    } catch (error) {
+      console.error('Error skipping image:', error);
+      toast.error(error instanceof Error ? error.message : 'Falha ao pular imagem');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -279,7 +313,7 @@ export default function MinimalisticSupervisionPage() {
                   variant="outline"
                   size="sm"
                   onClick={handleSkip}
-                  disabled={!imageInfo || imageInfo.unclassifiedImages.length === 0}
+                  disabled={!imageInfo || imageInfo.unclassifiedImages.length === 0 || isSaving}
                 >
                   <Shuffle className="h-4 w-4 mr-2" />
                   Pular
@@ -293,7 +327,8 @@ export default function MinimalisticSupervisionPage() {
                   <img
                     src={imageSrc}
                     alt={currentImage}
-                    className="max-w-full max-h-[500px] object-contain border rounded-lg"
+                    className="max-w-full max-h-[500px] object-contain border rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                    onClick={() => setIsImageModalOpen(true)}
                   />
                 ) : (
                   <div className="w-full h-64 bg-muted flex items-center justify-center rounded-lg">
@@ -352,6 +387,21 @@ export default function MinimalisticSupervisionPage() {
                 </div>
               </div>
 
+              {/* Observation Textarea */}
+              <div className="space-y-3">
+                <Label htmlFor="observation" className="text-base font-semibold">
+                  Observações (opcional)
+                </Label>
+                <Textarea
+                  id="observation"
+                  value={observation}
+                  onChange={(e) => setObservation(e.target.value)}
+                  placeholder="Digite observações sobre a imagem..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background resize-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                />
+              </div>
+
               {/* Save Button */}
               <Button
                 onClick={handleSaveClassification}
@@ -376,6 +426,21 @@ export default function MinimalisticSupervisionPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Image Modal */}
+        {isImageModalOpen && imageSrc && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50"
+            onClick={() => setIsImageModalOpen(false)}
+          >
+            <img
+              src={imageSrc}
+              alt={currentImage || 'Imagem expandida'}
+              className="h-[90vh] object-contain ring-1 ring-border"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         )}
       </div>
     </div>
