@@ -32,6 +32,16 @@ export async function POST(request: Request) {
       // Directory might already exist, ignore error
     }
     
+    // Ensure uploads directory exists if imagePath references it
+    if (imagePath.startsWith('uploads/')) {
+      const uploadsDir = join(process.cwd(), 'uploads');
+      try {
+        await mkdir(uploadsDir, { recursive: true });
+      } catch {
+        // Directory might already exist, ignore error
+      }
+    }
+    
     // Check if cached prediction exists
     try {
       await access(cacheFilePath, constants.F_OK);
