@@ -16,7 +16,7 @@ export async function GET(
       );
     }
     
-    const imagePath = join(process.cwd(), 'app', 'images', filename);
+    const imagePath = join(process.cwd(), 'app', 'images_fuseg', filename);
     const fileBuffer = await readFile(imagePath);
     const base64 = fileBuffer.toString('base64');
     

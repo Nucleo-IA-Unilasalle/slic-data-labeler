@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readFile } from 'fs/promises';
+import { readdir } from 'fs/promises';
 import { join } from 'path';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
@@ -56,24 +56,14 @@ export async function GET(request: Request) {
       classifiedData?.map((record: { image_name: string | null }) => record.image_name).filter(Boolean) || []
     );
     
-    // Read slic.csv to get images to show
-    const slicCsvPath = join(process.cwd(), 'app', 'api', 'supervision', 'slic.csv');
-    const slicCsvContent = await readFile(slicCsvPath, 'utf-8');
-    const slicCsvLines = slicCsvContent.trim().split('\n');
-    const slicImages = new Set(
-      slicCsvLines.slice(1).map((line) => line.split(',')[0])
-    );
+    // Read all images from images_fuseg directory
+    const imagesDirPath = join(process.cwd(), 'app', 'images_fuseg');
+    const allFiles = await readdir(imagesDirPath);
     
-    // Read vlm.csv to get images to show
-    const vlmCsvPath = join(process.cwd(), 'app', 'api', 'supervision', 'vlm.csv');
-    const vlmCsvContent = await readFile(vlmCsvPath, 'utf-8');
-    const vlmCsvLines = vlmCsvContent.trim().split('\n');
-    const vlmImages = new Set(
-      vlmCsvLines.slice(1).map((line) => line.split(',')[0])
+    // Filter only PNG files
+    const imagesToShow = new Set(
+      allFiles.filter((file) => file.endsWith('.png'))
     );
-    
-    // Combine all images to show (union of slic and vlm)
-    const imagesToShow = new Set([...slicImages, ...vlmImages]);
     
     // Filter to only unclassified images that should be shown (not classified by this user)
     const unclassifiedImages: string[] = [];
