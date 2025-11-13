@@ -45,11 +45,12 @@ export async function POST(request: Request) {
     
     const supabase = await createSupabaseClient();
     
-    // Check if image is already processed
+    // Check if image is already processed by this specific user
     const { data: existingRecord, error: queryError } = await supabase
       .from('human_feedback_tissue')
       .select('id')
       .eq('image_name', body.image_name)
+      .eq('user', body.username)
       .single();
     
     if (queryError && queryError.code !== 'PGRST116') {
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     
     if (existingRecord) {
       return NextResponse.json(
-        { error: 'Image already processed' },
+        { error: 'Image already processed by this user' },
         { status: 409 }
       );
     }

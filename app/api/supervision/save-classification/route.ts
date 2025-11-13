@@ -47,11 +47,12 @@ export async function POST(request: Request) {
     
     const supabase = await createSupabaseClient();
     
-    // Check if image is already classified
+    // Check if image is already classified by this specific user
     const { data: existingClassification, error: queryError } = await supabase
       .from('human_feedback_tissue')
       .select('id')
       .eq('image_name', body.image_name)
+      .eq('user', body.username)
       .single();
     
     if (queryError && queryError.code !== 'PGRST116') {
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
     
     if (existingClassification) {
       return NextResponse.json(
-        { error: 'Image already classified' },
+        { error: 'Image already classified by this user' },
         { status: 409 }
       );
     }
