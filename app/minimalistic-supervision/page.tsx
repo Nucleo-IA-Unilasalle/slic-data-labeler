@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { ArrowLeft, Shuffle, LogOut } from 'lucide-react';
+import { ArrowLeft, Shuffle, LogOut, User } from 'lucide-react';
 import Link from 'next/link';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -266,9 +266,12 @@ export default function MinimalisticSupervisionPage() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2 sm:mt-0">
-            <Badge variant="secondary" className="self-start sm:self-auto">
-              {username}
-            </Badge>
+            <Link href={`/minimalistic-supervision/user/${encodeURIComponent(username)}`}>
+              <Button variant="ghost" size="sm" className="w-full sm:w-auto">
+                <User className="h-4 w-4 mr-2" />
+                {username}
+              </Button>
+            </Link>
             <Button
               variant="outline"
               size="sm"
