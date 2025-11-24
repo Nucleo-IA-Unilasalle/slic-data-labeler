@@ -26,7 +26,7 @@ async function createSupabaseClient() {
   );
 }
 
-function escapeCsvField(field: any): string {
+function escapeCsvField(field: string | number | boolean | null | undefined): string {
   if (field === null || field === undefined) {
     return '';
   }
@@ -42,7 +42,7 @@ export async function GET() {
     const supabase = await createSupabaseClient();
 
     // Fetch all records from the table with pagination
-    let allRecords: any[] = [];
+    let allRecords: Record<string, unknown>[] = [];
     let page = 0;
     const pageSize = 1000;
     let hasMore = true;
@@ -62,7 +62,7 @@ export async function GET() {
       }
 
       if (records && records.length > 0) {
-        allRecords = [...allRecords, ...records];
+        allRecords = [...allRecords, ...(records as Record<string, unknown>[])];
         // If we got fewer records than pageSize, we've reached the end
         if (records.length < pageSize) {
           hasMore = false;
@@ -90,7 +90,7 @@ export async function GET() {
     const csvRows = [headers.join(',')];
 
     allRecords.forEach((record) => {
-      const row = headers.map((header) => escapeCsvField(record[header]));
+      const row = headers.map((header) => escapeCsvField(record[header] as string | number | boolean | null | undefined));
       csvRows.push(row.join(','));
     });
 
