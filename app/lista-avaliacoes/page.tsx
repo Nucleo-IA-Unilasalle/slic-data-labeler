@@ -25,7 +25,7 @@ interface ReviewedItem {
 }
 
 interface ImageData {
-  base64: string;
+  url: string;
   filename: string;
 }
 
@@ -148,7 +148,7 @@ function MobileCard({
         <div className="relative w-20 h-20 bg-gray-200 rounded overflow-hidden flex-shrink-0">
           {imageData ? (
             <img
-              src={imageData.base64}
+              src={imageData.url}
               alt={item.image_filename}
               className="w-full h-full object-cover"
             />
@@ -242,7 +242,7 @@ function TableRow({
         <div className="relative w-16 h-16 bg-gray-200 rounded overflow-hidden">
           {imageData ? (
             <img
-              src={imageData.base64}
+              src={imageData.url}
               alt={item.image_filename}
               className="w-full h-full object-cover"
             />
@@ -314,39 +314,11 @@ export default function ListaAvaliacoesPage() {
       return;
     }
 
-    // Skip if currently loading (check with functional update)
-    setLoadingImageSet((currentLoading) => {
-      if (currentLoading.has(imageFilename)) {
-        return currentLoading;
-      }
-
-      // Mark as loading
-      const newLoading = new Set(currentLoading);
-      newLoading.add(imageFilename);
-
-      // Load the image
-      fetch(`/api/original-image/${encodeURIComponent(imageFilename)}`)
-        .then((response) => response.json())
-        .then((data) => {
-          loadedImagesRef.current.add(imageFilename);
-          setTableImages((prev) => {
-            const newMap = new Map(prev);
-            newMap.set(imageFilename, data);
-            return newMap;
-          });
-        })
-        .catch((error) => {
-          console.error(`Failed to load image ${imageFilename}:`, error);
-        })
-        .finally(() => {
-          setLoadingImageSet((prev) => {
-            const newSet = new Set(prev);
-            newSet.delete(imageFilename);
-            return newSet;
-          });
-        });
-
-      return newLoading;
+    loadedImagesRef.current.add(imageFilename);
+    setTableImages((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(imageFilename, { url: `/images_fuseg/${imageFilename}`, filename: imageFilename });
+      return newMap;
     });
   }, []);
 
@@ -371,15 +343,8 @@ export default function ListaAvaliacoesPage() {
     }
 
     // Load image data
-    try {
-      const response = await fetch(`/api/original-image/${encodeURIComponent(item.image_filename)}`);
-      const data = await response.json();
-      setImageData(data);
-    } catch (error) {
-      console.error('Failed to load image:', error);
-    } finally {
-      setLoadingImage(false);
-    }
+    setImageData({ url: `/images_fuseg/${item.image_filename}`, filename: item.image_filename });
+    setLoadingImage(false);
   }
 
   function closeModal(): void {
@@ -540,7 +505,7 @@ export default function ListaAvaliacoesPage() {
                     )}
                     {imageData && !loadingImage && (
                       <img
-                        src={imageData.base64}
+                        src={imageData.url}
                         alt={selectedImage.image_filename}
                         className="max-w-full max-h-full object-contain rounded"
                       />

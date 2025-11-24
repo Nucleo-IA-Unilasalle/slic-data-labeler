@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { readdir } from 'fs/promises';
+import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
@@ -56,9 +56,10 @@ export async function GET(request: Request) {
       classifiedData?.map((record: { image_name: string | null }) => record.image_name).filter(Boolean) || []
     );
     
-    // Read all images from images_fuseg directory
-    const imagesDirPath = join(process.cwd(), 'app', 'images_fuseg');
-    const allFiles = await readdir(imagesDirPath);
+    // Read all images from generated JSON list
+    const listPath = join(process.cwd(), 'app', 'data', 'images_list.json');
+    const fileContent = await readFile(listPath, 'utf-8');
+    const allFiles = JSON.parse(fileContent) as string[];
     
     // Filter only PNG files
     const imagesToShow = new Set(

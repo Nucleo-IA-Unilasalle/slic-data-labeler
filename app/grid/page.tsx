@@ -351,21 +351,7 @@ function SampleCard({ sample }: { sample: SampleThumbnail }) {
   // Load original image on mount
   useEffect(() => {
     if (!sample.woundData) return;
-
-    async function loadOriginalImage() {
-      try {
-        const response = await fetch(`/api/original-image/${sample!.woundData!.image_filename}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch original image');
-        }
-        const imageData = await response.json();
-        setOriginalImgSrc(imageData.base64);
-      } catch (error) {
-        console.error(`Failed to load original image: ${sample!.woundData!.image_filename}`, error);
-      }
-    }
-
-    loadOriginalImage();
+    setOriginalImgSrc(`/images_fuseg/${sample.woundData.image_filename}`);
   }, [sample]);
 
   // Generate segmented image on hover

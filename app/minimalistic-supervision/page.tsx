@@ -120,17 +120,7 @@ export default function MinimalisticSupervisionPage() {
   };
 
   const loadImage = async (filename: string): Promise<void> => {
-    try {
-      const response = await fetch(`/api/original-image/${filename}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch image');
-      }
-      const data = await response.json();
-      setImageSrc(data.base64);
-    } catch (error) {
-      console.error('Error loading image:', error);
-      toast.error('Falha ao carregar imagem');
-    }
+    setImageSrc(`/images_fuseg/${filename}`);
   };
 
   const handleSaveClassification = async (): Promise<void> => {
