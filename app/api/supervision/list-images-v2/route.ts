@@ -1,7 +1,7 @@
 'use server';
 
 import { NextResponse } from 'next/server';
-import { readdir } from 'fs/promises';
+import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
@@ -55,11 +55,9 @@ export async function GET(request: Request) {
         .filter((value): value is string => Boolean(value)) ?? []
     );
 
-    const datasetDir = join(process.cwd(), 'public', 'dataset_all');
-    const allEntries = await readdir(datasetDir, { withFileTypes: true });
-    const allFiles = allEntries
-      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.png'))
-      .map((entry) => entry.name);
+    const listPath = join(process.cwd(), 'app', 'data', 'images_list.json');
+    const fileContent = await readFile(listPath, 'utf-8');
+    const allFiles = JSON.parse(fileContent) as string[];
 
     const priority = (name: string) => {
       if (name.startsWith('train_wsnet')) return 0;
@@ -67,15 +65,13 @@ export async function GET(request: Request) {
       return 2;
     };
 
-    const imagesToShow = allFiles;
-
-    const unclassifiedImages = imagesToShow
+    const unclassifiedImages = allFiles
       .filter((image) => !classifiedImages.has(image))
       .sort((a, b) => priority(a) - priority(b));
 
     return NextResponse.json({
       unclassifiedImages,
-      totalCount: imagesToShow.length,
+      totalCount: allFiles.length,
       unclassifiedCount: unclassifiedImages.length,
       classifiedCount: classifiedImages.size,
     });
