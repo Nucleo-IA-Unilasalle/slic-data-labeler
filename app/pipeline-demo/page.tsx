@@ -18,6 +18,12 @@ interface TissueResult {
   xgboost_tissue_type: string;
 }
 
+interface FpResult {
+  predicted_class: string;
+  needs_retry_photo: boolean;
+  probabilities: Record<string, number>;
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -29,6 +35,8 @@ export default function PipelineDemoPage() {
   const [loadingStep, setLoadingStep] = useState<string>('');
   const [segmentation, setSegmentation] = useState<SegmentationResult | null>(null);
   const [tissueResult, setTissueResult] = useState<TissueResult | null>(null);
+  const [fpResult, setFpResult] = useState<FpResult | null>(null);
+  const [fpAdvice, setFpAdvice] = useState<string | null>(null);
   const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [apiUrl, setApiUrl] = useState<string | null>(null);
@@ -151,6 +159,8 @@ export default function PipelineDemoPage() {
         setPreviewUrl(URL.createObjectURL(resizedFile));
         setSegmentation(null);
         setTissueResult(null);
+        setFpResult(null);
+        setFpAdvice(null);
         setMaskImageUrl(null);
         setError(null);
       } catch (err) {
@@ -238,6 +248,8 @@ export default function PipelineDemoPage() {
     setError(null);
     setSegmentation(null);
     setTissueResult(null);
+    setFpResult(null);
+    setFpAdvice(null);
     setMaskImageUrl(null);
 
     try {
@@ -245,7 +257,35 @@ export default function PipelineDemoPage() {
       setLoadingStep('Convertendo imagem...');
       const base64Image = await fileToBase64(selectedFile);
 
-      // Step 2: Run segmentation
+      // Step 2: Run FP pre-check before segmentation
+      setLoadingStep('Executando pré-checagem FP...');
+      const fpResponse = await fetch(`${apiUrl}/fp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: base64Image }),
+      });
+
+      if (!fpResponse.ok) {
+        throw new Error('Falha ao executar pré-checagem FP');
+      }
+
+      const fpData: FpResult = await fpResponse.json();
+      setFpResult(fpData);
+
+      const majorityClass = Object.entries(fpData.probabilities).reduce(
+        (bestClass, currentClass) => (currentClass[1] > bestClass[1] ? currentClass : bestClass),
+        ['', -Infinity] as [string, number]
+      )[0];
+
+      if (majorityClass === 'other') {
+        setFpAdvice('A imagem foi classificada majoritariamente como "other". Recomendamos retirar a foto e tentar novamente.');
+      } else {
+        setFpAdvice(null);
+      }
+
+      // Step 3: Run segmentation
       setLoadingStep('Executando segmentação da ferida...');
       const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
         method: 'POST',
@@ -262,7 +302,7 @@ export default function PipelineDemoPage() {
       const segmentationData: SegmentationResult = await segmentationResponse.json();
       setSegmentation(segmentationData);
 
-      // Step 3: Run tissue classification only if wound area > 0%
+      // Step 4: Run tissue classification only if wound area > 0%
       if (segmentationData.wound_percentage > 0) {
         setLoadingStep('Executando classificação de tecido...');
         const tissueResponse = await fetch(`${apiUrl}/tissue`, {
@@ -294,6 +334,8 @@ export default function PipelineDemoPage() {
   const clearResults = () => {
     setSegmentation(null);
     setTissueResult(null);
+    setFpResult(null);
+    setFpAdvice(null);
     setMaskImageUrl(null);
     setSelectedFile(null);
     setPreviewUrl(null);
@@ -449,6 +491,28 @@ export default function PipelineDemoPage() {
                 <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
                 <p className="text-sm text-blue-800 font-medium">{loadingStep}</p>
               </div>
+            </div>
+          )}
+
+          {/* FP Pre-check Result */}
+          {fpResult && (
+            <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+              <h2 className="text-base font-semibold text-gray-800 mb-3">
+                Pré-checagem FP
+              </h2>
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>
+                  <span className="font-medium">Classe prevista:</span> {fpResult.predicted_class}
+                </p>
+                <p>
+                  <span className="font-medium">Precisa refazer foto:</span> {fpResult.needs_retry_photo ? 'Sim' : 'Não'}
+                </p>
+              </div>
+              {fpAdvice && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3 mt-3 rounded">
+                  <p className="text-xs text-yellow-800">{fpAdvice}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -715,6 +779,27 @@ export default function PipelineDemoPage() {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
               <h3 className="text-red-800 font-semibold mb-1">Erro</h3>
               <p className="text-red-700">{error}</p>
+            </div>
+          )}
+
+          {fpResult && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                Pré-checagem FP
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+                <p>
+                  <span className="font-semibold">Classe prevista:</span> {fpResult.predicted_class}
+                </p>
+                <p>
+                  <span className="font-semibold">Precisa refazer foto:</span> {fpResult.needs_retry_photo ? 'Sim' : 'Não'}
+                </p>
+              </div>
+              {fpAdvice && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+                  <p className="text-yellow-800 font-medium">{fpAdvice}</p>
+                </div>
+              )}
             </div>
           )}
 
