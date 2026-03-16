@@ -24,6 +24,14 @@ interface FpResult {
   probabilities: Record<string, number>;
 }
 
+interface SurgWoundResult {
+  modality: string;
+  predicted_index: number;
+  predicted_label: string;
+  confidence: number;
+  probabilities: Record<string, number>;
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -36,6 +44,9 @@ export default function PipelineDemoPage() {
   const [segmentation, setSegmentation] = useState<SegmentationResult | null>(null);
   const [tissueResult, setTissueResult] = useState<TissueResult | null>(null);
   const [fpResult, setFpResult] = useState<FpResult | null>(null);
+  const [exudateTypeResult, setExudateTypeResult] = useState<SurgWoundResult | null>(null);
+  const [healingStatusResult, setHealingStatusResult] = useState<SurgWoundResult | null>(null);
+  const [infectionRiskResult, setInfectionRiskResult] = useState<SurgWoundResult | null>(null);
   const [fpAdvice, setFpAdvice] = useState<string | null>(null);
   const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +171,9 @@ export default function PipelineDemoPage() {
         setSegmentation(null);
         setTissueResult(null);
         setFpResult(null);
+        setExudateTypeResult(null);
+        setHealingStatusResult(null);
+        setInfectionRiskResult(null);
         setFpAdvice(null);
         setMaskImageUrl(null);
         setError(null);
@@ -249,6 +263,9 @@ export default function PipelineDemoPage() {
     setSegmentation(null);
     setTissueResult(null);
     setFpResult(null);
+    setExudateTypeResult(null);
+    setHealingStatusResult(null);
+    setInfectionRiskResult(null);
     setFpAdvice(null);
     setMaskImageUrl(null);
 
@@ -323,6 +340,46 @@ export default function PipelineDemoPage() {
         const tissueData: TissueResult = await tissueResponse.json();
         setTissueResult(tissueData);
       }
+
+      // Step 5: Run SurgWound modality predictions
+      setLoadingStep('Executando classificação SurgWound...');
+      const [exudateResponse, healingResponse, infectionResponse] = await Promise.all([
+        fetch(`${apiUrl}/surgwound/exudate-type`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image }),
+        }),
+        fetch(`${apiUrl}/surgwound/healing-status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image }),
+        }),
+        fetch(`${apiUrl}/surgwound/infection-risk-assessment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image }),
+        }),
+      ]);
+
+      if (!exudateResponse.ok || !healingResponse.ok || !infectionResponse.ok) {
+        throw new Error('Falha ao executar classificação SurgWound');
+      }
+
+      const [exudateData, healingData, infectionData] = await Promise.all([
+        exudateResponse.json() as Promise<SurgWoundResult>,
+        healingResponse.json() as Promise<SurgWoundResult>,
+        infectionResponse.json() as Promise<SurgWoundResult>,
+      ]);
+
+      setExudateTypeResult(exudateData);
+      setHealingStatusResult(healingData);
+      setInfectionRiskResult(infectionData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido ocorreu');
     } finally {
@@ -335,6 +392,9 @@ export default function PipelineDemoPage() {
     setSegmentation(null);
     setTissueResult(null);
     setFpResult(null);
+    setExudateTypeResult(null);
+    setHealingStatusResult(null);
+    setInfectionRiskResult(null);
     setFpAdvice(null);
     setMaskImageUrl(null);
     setSelectedFile(null);
@@ -606,6 +666,32 @@ export default function PipelineDemoPage() {
                     {tissueResult.xgboost_slough_amount || 'Desconhecido'}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {(exudateTypeResult || healingStatusResult || infectionRiskResult) && (
+            <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+              <h2 className="text-base font-semibold text-gray-800 mb-3">
+                Informações de acompanhamento
+              </h2>
+
+              <div className="space-y-2 text-sm text-gray-700">
+                {exudateTypeResult && (
+                  <p>
+                    <span className="font-medium">Exsudato:</span> {exudateTypeResult.predicted_label} ({(exudateTypeResult.confidence * 100).toFixed(1)}%)
+                  </p>
+                )}
+                {healingStatusResult && (
+                  <p>
+                    <span className="font-medium">Cicatrização:</span> {healingStatusResult.predicted_label} ({(healingStatusResult.confidence * 100).toFixed(1)}%)
+                  </p>
+                )}
+                {infectionRiskResult && (
+                  <p>
+                    <span className="font-medium">Risco de infecção:</span> {infectionRiskResult.predicted_label} ({(infectionRiskResult.confidence * 100).toFixed(1)}%)
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -900,6 +986,40 @@ export default function PipelineDemoPage() {
                   <div className={`px-4 py-3 rounded-lg text-center font-semibold text-lg ${getExudateColor(tissueResult.xgboost_slough_amount)}`}>
                     {tissueResult.xgboost_slough_amount || 'Desconhecido'}
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(exudateTypeResult || healingStatusResult || infectionRiskResult) && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+              Informações de acompanhamento
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-700">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="font-semibold mb-2">Exsudato</p>
+                  <p>{exudateTypeResult?.predicted_label ?? 'N/A'}</p>
+                  {exudateTypeResult && (
+                    <p className="text-xs text-gray-500 mt-1">Confiança: {(exudateTypeResult.confidence * 100).toFixed(1)}%</p>
+                  )}
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="font-semibold mb-2">Cicatrização</p>
+                  <p>{healingStatusResult?.predicted_label ?? 'N/A'}</p>
+                  {healingStatusResult && (
+                    <p className="text-xs text-gray-500 mt-1">Confiança: {(healingStatusResult.confidence * 100).toFixed(1)}%</p>
+                  )}
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="font-semibold mb-2">Risco de infecção</p>
+                  <p>{infectionRiskResult?.predicted_label ?? 'N/A'}</p>
+                  {infectionRiskResult && (
+                    <p className="text-xs text-gray-500 mt-1">Confiança: {(infectionRiskResult.confidence * 100).toFixed(1)}%</p>
+                  )}
                 </div>
               </div>
             </div>
