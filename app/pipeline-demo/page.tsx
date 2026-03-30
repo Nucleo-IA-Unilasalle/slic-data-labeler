@@ -18,6 +18,10 @@ interface TissueResult {
   xgboost_tissue_type: string;
 }
 
+interface DeepskinResult {
+  pwat_score: number;
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -29,6 +33,7 @@ export default function PipelineDemoPage() {
   const [loadingStep, setLoadingStep] = useState<string>('');
   const [segmentation, setSegmentation] = useState<SegmentationResult | null>(null);
   const [tissueResult, setTissueResult] = useState<TissueResult | null>(null);
+  const [deepskinResult, setDeepskinResult] = useState<DeepskinResult | null>(null);
   const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [apiUrl, setApiUrl] = useState<string | null>(null);
@@ -151,6 +156,7 @@ export default function PipelineDemoPage() {
         setPreviewUrl(URL.createObjectURL(resizedFile));
         setSegmentation(null);
         setTissueResult(null);
+        setDeepskinResult(null);
         setMaskImageUrl(null);
         setError(null);
       } catch (err) {
@@ -194,16 +200,16 @@ export default function PipelineDemoPage() {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
-    
+
     if (!ctx) return;
-    
+
     const imageData = ctx.createImageData(width, height);
-    
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const idx = (y * width + x) * 4;
         const maskValue = mask[y][x];
-        
+
         if (maskValue > 0) {
           imageData.data[idx] = 0;
           imageData.data[idx + 1] = 0;
@@ -217,7 +223,7 @@ export default function PipelineDemoPage() {
         }
       }
     }
-    
+
     ctx.putImageData(imageData, 0, 0);
     setMaskImageUrl(canvas.toDataURL());
   };
@@ -264,24 +270,32 @@ export default function PipelineDemoPage() {
 
       // Step 3: Run tissue classification only if wound area > 0%
       if (segmentationData.wound_percentage > 0) {
-        setLoadingStep('Executando classificação de tecido...');
-        const tissueResponse = await fetch(`${apiUrl}/tissue`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            image: base64Image,
-            mask: segmentationData.mask
-          }),
-        });
+        setLoadingStep('Executando classificação de tecido e análise deepskin...');
 
-        if (!tissueResponse.ok) {
-          throw new Error('Falha ao executar classificação de tecido');
-        }
+        const [tissueResponse, deepskinResponse] = await Promise.all([
+          fetch(`${apiUrl}/tissue`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              image: base64Image,
+              mask: segmentationData.mask
+            }),
+          }),
+          fetch(`${apiUrl}/deepskin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64Image }),
+          })
+        ]);
+
+        if (!tissueResponse.ok) throw new Error('Falha ao executar classificação de tecido');
+        if (!deepskinResponse.ok) throw new Error('Falha ao executar análise Deepskin');
 
         const tissueData: TissueResult = await tissueResponse.json();
+        const deepskinData: DeepskinResult = await deepskinResponse.json();
+
         setTissueResult(tissueData);
+        setDeepskinResult(deepskinData);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido ocorreu');
@@ -294,6 +308,7 @@ export default function PipelineDemoPage() {
   const clearResults = () => {
     setSegmentation(null);
     setTissueResult(null);
+    setDeepskinResult(null);
     setMaskImageUrl(null);
     setSelectedFile(null);
     setPreviewUrl(null);
@@ -546,6 +561,21 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
+          {/* Deepskin Results */}
+          {deepskinResult && (
+            <div className="bg-white rounded-lg shadow-md p-4 mb-4 md:p-6">
+              <h2 className="text-base md:text-xl font-semibold text-gray-800 mb-3 md:mb-4">
+                Análise Deepskin
+              </h2>
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-100 text-center">
+                <p className="text-sm font-medium text-blue-800 mb-1">Score PWAT</p>
+                <p className="text-3xl font-bold text-blue-900">
+                  {deepskinResult.pwat_score.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* PUSH Scale */}
           {segmentation && (tissueResult || segmentation.wound_percentage === 0) && (
             <div className="bg-white rounded-lg shadow-md p-4 mb-4">
@@ -650,6 +680,8 @@ export default function PipelineDemoPage() {
           )}
         </div>
       </div>
+
+      {/* Desktop Version */}
       <div className="hidden md:block min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-4xl mx-auto flex flex-col gap-2">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">
@@ -820,6 +852,22 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
+          {/* Deepskin Results - Desktop */}
+          {deepskinResult && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                Análise Deepskin
+              </h2>
+              {/* 'text-center' e 'block w-full' adicionados */}
+              <div className="bg-blue-50 rounded-lg p-4 block w-full border border-blue-100 text-center">
+                <p className="text-sm font-medium text-blue-800 mb-1">Score PWAT</p>
+                <p className="text-3xl font-bold text-blue-900">
+                  {deepskinResult.pwat_score.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          )}
+
           {segmentation && (tissueResult || segmentation.wound_percentage === 0) && (
             <div ref={pushScaleRef} className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
@@ -943,4 +991,3 @@ export default function PipelineDemoPage() {
     </>
   );
 }
-
