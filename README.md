@@ -51,32 +51,6 @@ bun install
 pip install -r scripts/requirements.txt
 ```
 
-### Configuring PWAT Module
-
-Clone the Deepskin model from GitHub to perform the analysis:
-
-``` bash
-git clone https://github.com/Nico-Curti/Deepskin.git
-```
-
-Create a Python virtual environment:
-
-``` bash
-python -m venv .venv
-```
-
-Install the required dependencies for the model:
-
-``` bash
-pip install -r <RELATIVE-PATH>/Deepskin/requirements.txt
-```
-
-Create a symlink to the local repository:
-
-``` bash
-pip install -e <RELATIVE-PATH>/Deepskin/
-```
-
 ### Running the Application
 
 Start the development server:
