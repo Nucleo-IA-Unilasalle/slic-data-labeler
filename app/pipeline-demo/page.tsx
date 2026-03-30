@@ -22,6 +22,153 @@ interface DeepskinResult {
   pwat_score: number;
 }
 
+interface SurgwoundModalityResult {
+  modality: string;
+  predicted_label: string;
+  confidence: number;
+  probabilities: Record<string, number>;
+}
+
+interface FetchOutcome {
+  response: Response | null;
+  networkError: Error | null;
+}
+
+async function fetchWithNetworkGrace(url: string, init: RequestInit): Promise<FetchOutcome> {
+  try {
+    const response: Response = await fetch(url, init);
+    return { response, networkError: null };
+  } catch (cause: unknown) {
+    const networkError: Error =
+      cause instanceof Error ? cause : new Error(String(cause));
+    console.error('fetchWithNetworkGrace failed:', url, networkError);
+    return { response: null, networkError };
+  }
+}
+
+function parseSurgwoundModalityPayload(payload: unknown): SurgwoundModalityResult {
+  if (payload === null || typeof payload !== 'object') {
+    throw new TypeError('SurgWound: corpo JSON inválido');
+  }
+  const o: Record<string, unknown> = payload as Record<string, unknown>;
+  const predictedLabelRaw: unknown = o.predicted_label;
+  const confidenceRaw: unknown = o.confidence;
+  const probabilitiesRaw: unknown = o.probabilities;
+  const modalityRaw: unknown = o.modality;
+  if (typeof predictedLabelRaw !== 'string') {
+    throw new TypeError('SurgWound: predicted_label ausente ou inválido');
+  }
+  if (typeof confidenceRaw !== 'number' || !Number.isFinite(confidenceRaw)) {
+    throw new TypeError('SurgWound: confidence ausente ou inválido');
+  }
+  const probabilities: Record<string, number> = {};
+  if (
+    probabilitiesRaw !== null &&
+    typeof probabilitiesRaw === 'object' &&
+    !Array.isArray(probabilitiesRaw)
+  ) {
+    for (const [key, value] of Object.entries(probabilitiesRaw)) {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        probabilities[key] = value;
+      }
+    }
+  }
+  const modality: string = typeof modalityRaw === 'string' ? modalityRaw : 'SurgWound';
+  return {
+    modality,
+    predicted_label: predictedLabelRaw,
+    confidence: confidenceRaw,
+    probabilities,
+  };
+}
+
+type SurgwoundParseResult =
+  | { status: 'ok'; data: SurgwoundModalityResult }
+  | { status: 'err'; message: string };
+
+async function tryParseSurgwoundModality(outcome: FetchOutcome): Promise<SurgwoundParseResult> {
+  if (outcome.networkError !== null) {
+    return { status: 'err', message: outcome.networkError.message };
+  }
+  if (outcome.response === null) {
+    return { status: 'err', message: 'resposta vazia' };
+  }
+  const response: Response = outcome.response;
+  let bodyText: string;
+  try {
+    bodyText = await response.text();
+  } catch (readErr: unknown) {
+    const msg: string = readErr instanceof Error ? readErr.message : 'falha ao ler resposta';
+    return { status: 'err', message: msg };
+  }
+  if (!response.ok) {
+    let errDetail: string = `HTTP ${String(response.status)}`;
+    try {
+      const errJson: unknown = JSON.parse(bodyText);
+      if (
+        typeof errJson === 'object' &&
+        errJson !== null &&
+        typeof (errJson as Record<string, unknown>).error === 'string'
+      ) {
+        errDetail = (errJson as Record<string, unknown>).error as string;
+      }
+    } catch {
+      /* use HTTP status */
+    }
+    return { status: 'err', message: errDetail };
+  }
+  try {
+    const data: unknown = JSON.parse(bodyText);
+    const parsed: SurgwoundModalityResult = parseSurgwoundModalityPayload(data);
+    return { status: 'ok', data: parsed };
+  } catch (parseErr: unknown) {
+    const msg: string =
+      parseErr instanceof Error ? parseErr.message : 'JSON ou formato inválido';
+    return { status: 'err', message: msg };
+  }
+}
+
+function SurgwoundModalityPanel(props: {
+  result: SurgwoundModalityResult | null;
+  compact: boolean;
+}) {
+  const { result, compact } = props;
+  if (result === null) {
+    return null;
+  }
+  const titleClass: string = compact
+    ? 'text-xs font-medium text-gray-600'
+    : 'text-sm font-medium text-gray-600';
+  const labelClass: string = compact
+    ? 'text-base font-semibold text-gray-900'
+    : 'text-lg font-semibold text-gray-900';
+  const probText: string = compact ? 'text-xs' : 'text-sm';
+  const probEntries: [string, number][] = Object.entries(result.probabilities).sort(
+    (a: [string, number], b: [string, number]) => b[1] - a[1]
+  );
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      <p className={titleClass}>{result.modality}</p>
+      <p className={labelClass}>{result.predicted_label}</p>
+      <p className={`mt-1 text-gray-600 ${compact ? 'text-xs' : 'text-sm'}`}>
+        Confiança: {(result.confidence * 100).toFixed(1)}%
+      </p>
+      {probEntries.length > 0 && (
+        <details className={`mt-2 text-gray-600 ${probText}`}>
+          <summary className="cursor-pointer font-medium text-gray-700">Probabilidades</summary>
+          <ul className="mt-1 list-inside list-disc space-y-0.5">
+            {probEntries.map((entry: [string, number]) => (
+              <li key={entry[0]}>
+                {entry[0]}: {(entry[1] * 100).toFixed(1)}%
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -34,12 +181,18 @@ export default function PipelineDemoPage() {
   const [segmentation, setSegmentation] = useState<SegmentationResult | null>(null);
   const [tissueResult, setTissueResult] = useState<TissueResult | null>(null);
   const [deepskinResult, setDeepskinResult] = useState<DeepskinResult | null>(null);
+  const [deepskinWarning, setDeepskinWarning] = useState<string | null>(null);
+  const [surgwoundExudate, setSurgwoundExudate] = useState<SurgwoundModalityResult | null>(null);
+  const [surgwoundHealing, setSurgwoundHealing] = useState<SurgwoundModalityResult | null>(null);
+  const [surgwoundInfection, setSurgwoundInfection] = useState<SurgwoundModalityResult | null>(
+    null
+  );
+  const [surgwoundWarning, setSurgwoundWarning] = useState<string | null>(null);
   const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [apiUrl, setApiUrl] = useState<string | null>(null);
   const segmentationRef = useRef<HTMLDivElement>(null);
   const tissueResultRef = useRef<HTMLDivElement>(null);
-  const pushScaleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchActiveApiUrl();
@@ -157,6 +310,11 @@ export default function PipelineDemoPage() {
         setSegmentation(null);
         setTissueResult(null);
         setDeepskinResult(null);
+        setDeepskinWarning(null);
+        setSurgwoundExudate(null);
+        setSurgwoundHealing(null);
+        setSurgwoundInfection(null);
+        setSurgwoundWarning(null);
         setMaskImageUrl(null);
         setError(null);
       } catch (err) {
@@ -186,14 +344,6 @@ export default function PipelineDemoPage() {
       }, 100);
     }
   }, [tissueResult]);
-
-  useEffect(() => {
-    if (segmentation && (tissueResult || segmentation.wound_percentage === 0) && pushScaleRef.current) {
-      setTimeout(() => {
-        pushScaleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 200);
-    }
-  }, [segmentation, tissueResult]);
 
   const createMaskImage = (mask: number[][], width: number, height: number) => {
     const canvas = document.createElement('canvas');
@@ -242,6 +392,11 @@ export default function PipelineDemoPage() {
 
     setIsLoading(true);
     setError(null);
+    setDeepskinWarning(null);
+    setSurgwoundExudate(null);
+    setSurgwoundHealing(null);
+    setSurgwoundInfection(null);
+    setSurgwoundWarning(null);
     setSegmentation(null);
     setTissueResult(null);
     setMaskImageUrl(null);
@@ -268,12 +423,54 @@ export default function PipelineDemoPage() {
       const segmentationData: SegmentationResult = await segmentationResponse.json();
       setSegmentation(segmentationData);
 
+      const ingestSurgwoundTriplet = async (
+        exOutcome: FetchOutcome,
+        healOutcome: FetchOutcome,
+        infOutcome: FetchOutcome
+      ): Promise<void> => {
+        const [exR, healR, infR]: [
+          SurgwoundParseResult,
+          SurgwoundParseResult,
+          SurgwoundParseResult,
+        ] = await Promise.all([
+          tryParseSurgwoundModality(exOutcome),
+          tryParseSurgwoundModality(healOutcome),
+          tryParseSurgwoundModality(infOutcome),
+        ]);
+
+        setSurgwoundExudate(exR.status === 'ok' ? exR.data : null);
+        setSurgwoundHealing(healR.status === 'ok' ? healR.data : null);
+        setSurgwoundInfection(infR.status === 'ok' ? infR.data : null);
+
+        const warnings: string[] = [];
+        if (exR.status === 'err') {
+          warnings.push(`Tipo de exsudato (SurgWound): ${exR.message}`);
+        }
+        if (healR.status === 'err') {
+          warnings.push(`Estado de cicatrização (SurgWound): ${healR.message}`);
+        }
+        if (infR.status === 'err') {
+          warnings.push(`Risco de infeção (SurgWound): ${infR.message}`);
+        }
+        setSurgwoundWarning(warnings.length > 0 ? warnings.join(' · ') : null);
+      };
+
+      const surgwoundRequestBody: string = JSON.stringify({ image: base64Image });
+
       // Step 3: Run tissue classification only if wound area > 0%
       if (segmentationData.wound_percentage > 0) {
-        setLoadingStep('Executando classificação de tecido e analise deepskin...');
+        setLoadingStep(
+          'Executando tecido, Deepskin e classificações SurgWound...'
+        );
 
-        const [tissueResponse, deepskinResponse] = await Promise.all([
-          fetch(`${apiUrl}/tissue`, {
+        const [
+          tissueOutcome,
+          deepskinOutcome,
+          surgExOutcome,
+          surgHealOutcome,
+          surgInfOutcome,
+        ] = await Promise.all([
+          fetchWithNetworkGrace(`${apiUrl}/tissue`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -281,21 +478,103 @@ export default function PipelineDemoPage() {
               mask: segmentationData.mask
             }),
           }),
-          fetch(`${apiUrl}/deepskin`, {
+          fetchWithNetworkGrace(`${apiUrl}/deepskin`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image: base64Image }),
-          })
+          }),
+          fetchWithNetworkGrace(`${apiUrl}/surgwound/exudate-type`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: surgwoundRequestBody,
+          }),
+          fetchWithNetworkGrace(`${apiUrl}/surgwound/healing-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: surgwoundRequestBody,
+          }),
+          fetchWithNetworkGrace(`${apiUrl}/surgwound/infection-risk-assessment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: surgwoundRequestBody,
+          }),
         ]);
 
-        if (!tissueResponse.ok) throw new Error('Falha ao executar classificação de tecido');
-        if (!deepskinResponse.ok) throw new Error('Falha ao executar análise Deepskin');
+        await ingestSurgwoundTriplet(surgExOutcome, surgHealOutcome, surgInfOutcome);
+
+        if (tissueOutcome.networkError !== null) {
+          throw new Error(
+            `Falha ao executar classificação de tecido: ${tissueOutcome.networkError.message}`
+          );
+        }
+        if (tissueOutcome.response === null) {
+          throw new Error('Falha ao executar classificação de tecido: resposta vazia');
+        }
+        const tissueResponse: Response = tissueOutcome.response;
+        if (!tissueResponse.ok) {
+          throw new Error('Falha ao executar classificação de tecido');
+        }
 
         const tissueData: TissueResult = await tissueResponse.json();
-        const deepskinData: DeepskinResult = await deepskinResponse.json();
-
         setTissueResult(tissueData);
-        setDeepskinResult(deepskinData);
+
+        if (deepskinOutcome.networkError !== null) {
+          setDeepskinResult(null);
+          setDeepskinWarning(
+            `Análise Deepskin indisponível (rede): ${deepskinOutcome.networkError.message}`
+          );
+        } else if (deepskinOutcome.response === null) {
+          setDeepskinResult(null);
+          setDeepskinWarning('Análise Deepskin indisponível: resposta vazia');
+        } else {
+          const deepskinResponse: Response = deepskinOutcome.response;
+          if (!deepskinResponse.ok) {
+            setDeepskinResult(null);
+            setDeepskinWarning(
+              `Análise Deepskin indisponível (HTTP ${String(deepskinResponse.status)}). Demais resultados foram mantidos.`
+            );
+          } else {
+            try {
+              const deepskinData: unknown = await deepskinResponse.json();
+              if (
+                typeof deepskinData !== 'object' ||
+                deepskinData === null ||
+                !('pwat_score' in deepskinData) ||
+                typeof (deepskinData as DeepskinResult).pwat_score !== 'number'
+              ) {
+                throw new TypeError('Resposta Deepskin com formato inválido');
+              }
+              setDeepskinResult(deepskinData as DeepskinResult);
+              setDeepskinWarning(null);
+            } catch (parseErr: unknown) {
+              const msg: string =
+                parseErr instanceof Error ? parseErr.message : 'Erro ao interpretar Deepskin';
+              console.error('Deepskin parse failed:', parseErr);
+              setDeepskinResult(null);
+              setDeepskinWarning(`Análise Deepskin indisponível: ${msg}`);
+            }
+          }
+        }
+      } else {
+        setLoadingStep('Executando classificações SurgWound...');
+        const [surgExOutcome, surgHealOutcome, surgInfOutcome] = await Promise.all([
+          fetchWithNetworkGrace(`${apiUrl}/surgwound/exudate-type`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: surgwoundRequestBody,
+          }),
+          fetchWithNetworkGrace(`${apiUrl}/surgwound/healing-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: surgwoundRequestBody,
+          }),
+          fetchWithNetworkGrace(`${apiUrl}/surgwound/infection-risk-assessment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: surgwoundRequestBody,
+          }),
+        ]);
+        await ingestSurgwoundTriplet(surgExOutcome, surgHealOutcome, surgInfOutcome);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido ocorreu');
@@ -309,6 +588,11 @@ export default function PipelineDemoPage() {
     setSegmentation(null);
     setTissueResult(null);
     setDeepskinResult(null);
+    setDeepskinWarning(null);
+    setSurgwoundExudate(null);
+    setSurgwoundHealing(null);
+    setSurgwoundInfection(null);
+    setSurgwoundWarning(null);
     setMaskImageUrl(null);
     setSelectedFile(null);
     setPreviewUrl(null);
@@ -340,50 +624,6 @@ export default function PipelineDemoPage() {
     return colors[exudateLevel.toLowerCase()] || 'bg-gray-100 text-gray-800';
   };
 
-  const getPushExudateScore = (exudateLevel: string | undefined | null): number => {
-    if (!exudateLevel) return -1;
-    const mapping: { [key: string]: number } = {
-      'none': 0,
-      'low': 1,
-      'medium': 2,
-      'high': 3,
-    };
-    return mapping[exudateLevel.toLowerCase()] ?? -1;
-  };
-
-  const getPushTissueScore = (tissueType: string | undefined | null, woundPercentage: number): number => {
-    if (woundPercentage === 0) return 0;
-    if (!tissueType) return -1;
-    const mapping: { [key: string]: number } = {
-      'epitelial': 1,
-      'granulação': 2,
-      'esfacelo': 3,
-      'necrotic': 4,
-    };
-    return mapping[tissueType.toLowerCase()] ?? -1;
-  };
-
-  const getExudateLevelFromScore = (score: number): string | null => {
-    const mapping: { [key: number]: string } = {
-      0: 'none',
-      1: 'low',
-      2: 'medium',
-      3: 'high',
-    };
-    return mapping[score] ?? null;
-  };
-
-  const getTissueTypeFromScore = (score: number): string | null => {
-    const mapping: { [key: number]: string | null } = {
-      0: null,
-      1: 'epitelial',
-      2: 'granulação',
-      3: 'esfacelo',
-      4: 'necrotic',
-    };
-    return mapping[score] ?? null;
-  };
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCameraClick = () => {
@@ -409,6 +649,20 @@ export default function PipelineDemoPage() {
             <div className="bg-red-50 border-l-4 border-red-500 p-3 mb-4 rounded">
               <p className="text-sm text-red-800 font-medium">Erro</p>
               <p className="text-xs text-red-700 mt-1">{error}</p>
+            </div>
+          )}
+
+          {deepskinWarning && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-3 mb-4 rounded">
+              <p className="text-sm text-amber-900 font-medium">Aviso</p>
+              <p className="text-xs text-amber-800 mt-1">{deepskinWarning}</p>
+            </div>
+          )}
+
+          {surgwoundWarning && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-3 mb-4 rounded">
+              <p className="text-sm text-amber-900 font-medium">Aviso</p>
+              <p className="text-xs text-amber-800 mt-1">{surgwoundWarning}</p>
             </div>
           )}
 
@@ -487,7 +741,7 @@ export default function PipelineDemoPage() {
 
                 <div>
                   <p className="text-xs font-medium text-gray-600 mb-2">Segmentação</p>
-                  <div className="relative rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="relative overflow-hidden rounded-lg border border-gray-200">
                     <img
                       src={previewUrl || ''}
                       alt="Base"
@@ -576,82 +830,14 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
-          {/* PUSH Scale */}
-          {segmentation && (tissueResult || segmentation.wound_percentage === 0) && (
-            <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-              <h2 className="text-base font-semibold text-gray-800 mb-3">
-                Escala PUSH
-              </h2>
-
-              {/* Exudate Amount */}
-              <div className="mb-4">
-                <p className="text-xs font-semibold text-gray-700 mb-2">Quantidade de Exsudato</p>
-                <div className="grid grid-cols-4 gap-1">
-                  {[
-                    { score: 0, label: 'Ausente' },
-                    { score: 1, label: 'Pequena' },
-                    { score: 2, label: 'Moderada' },
-                    { score: 3, label: 'Grande' },
-                  ].map((item) => {
-                    const exudateScore = getPushExudateScore(tissueResult?.xgboost_slough_amount);
-                    const isHighlighted = exudateScore === item.score;
-                    const exudateLevel = getExudateLevelFromScore(item.score);
-                    const colorClasses = getExudateColor(exudateLevel);
-                    return (
-                      <div
-                        key={item.score}
-                        className={`border border-gray-300 p-2 rounded text-center ${
-                          isHighlighted
-                            ? `${colorClasses} font-bold border-2 border-gray-800`
-                            : 'bg-white text-gray-700'
-                        }`}
-                      >
-                        <div className="text-lg font-bold">{item.score}</div>
-                        <div className="text-xs mt-1">{item.label}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Tissue Type */}
-              <div>
-                <p className="text-xs font-semibold text-gray-700 mb-2">Tipo de Tecido</p>
-                <div className="grid grid-cols-2 gap-1">
-                  {[
-                    { score: 0, label: 'Ferida Fechada' },
-                    { score: 1, label: 'Epitelial' },
-                    { score: 2, label: 'Granulação' },
-                    { score: 3, label: 'Esfacelo' },
-                    { score: 4, label: 'Necrótico' },
-                  ].map((item) => {
-                    const tissueScore = getPushTissueScore(
-                      tissueResult?.xgboost_tissue_type,
-                      segmentation.wound_percentage
-                    );
-                    const isHighlighted = tissueScore === item.score;
-                    const tissueType = getTissueTypeFromScore(item.score);
-                    const colorClasses = getTissueColor(tissueType);
-                    return (
-                      <div
-                        key={item.score}
-                        className={`border border-gray-300 p-2 rounded text-center ${
-                          isHighlighted
-                            ? `${colorClasses} font-bold border-2 border-gray-800`
-                            : 'bg-white text-gray-700'
-                        }`}
-                      >
-                        <div className="text-lg font-bold">{item.score}</div>
-                        <div className="text-xs mt-1">{item.label}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <p className="text-xs text-gray-500 mt-3">
-                <span className="font-semibold">Nota:</span> A célula destacada indica o valor detectado
-              </p>
+          {(surgwoundExudate !== null ||
+            surgwoundHealing !== null ||
+            surgwoundInfection !== null) && (
+            <div className="bg-white rounded-lg shadow-md p-4 mb-4 space-y-3">
+              <h2 className="text-base font-semibold text-gray-800">SurgWound</h2>
+              <SurgwoundModalityPanel result={surgwoundExudate} compact={true} />
+              <SurgwoundModalityPanel result={surgwoundHealing} compact={true} />
+              <SurgwoundModalityPanel result={surgwoundInfection} compact={true} />
             </div>
           )}
         </div>
@@ -748,6 +934,20 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
+          {deepskinWarning && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <h3 className="text-amber-900 font-semibold mb-1">Aviso</h3>
+              <p className="text-amber-800">{deepskinWarning}</p>
+            </div>
+          )}
+
+          {surgwoundWarning && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <h3 className="text-amber-900 font-semibold mb-1">Aviso</h3>
+              <p className="text-amber-800">{surgwoundWarning}</p>
+            </div>
+          )}
+
           {segmentation && maskImageUrl && (
             <div ref={segmentationRef} className="bg-white rounded-lg shadow-md p-6">
               <div className="flex justify-between items-start mb-4">
@@ -765,27 +965,27 @@ export default function PipelineDemoPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Imagem Original</p>
-                  <div className="relative border border-gray-300 rounded-lg overflow-hidden">
+                  <div className="overflow-hidden rounded-lg border border-gray-300">
                     <img
                       src={previewUrl || ''}
                       alt="Original"
-                      className="w-full h-auto"
+                      className="h-auto w-full"
                     />
                   </div>
                 </div>
 
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Sobreposição de Segmentação</p>
-                  <div className="relative border border-gray-300 rounded-lg overflow-hidden">
+                  <div className="relative overflow-hidden rounded-lg border border-gray-300">
                     <img
                       src={previewUrl || ''}
                       alt="Base"
-                      className="w-full h-auto"
+                      className="h-auto w-full"
                     />
                     <img
                       src={maskImageUrl}
                       alt="Máscara"
-                      className="absolute top-0 left-0 w-full h-auto"
+                      className="absolute top-0 left-0 h-auto w-full"
                       style={{ mixBlendMode: 'multiply' }}
                     />
                   </div>
@@ -865,121 +1065,15 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
-          {segmentation && (tissueResult || segmentation.wound_percentage === 0) && (
-            <div ref={pushScaleRef} className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Escala Push
-              </h2>
-
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-300">
-                  <tbody>
-                    <tr>
-                      <td className="border border-gray-300 px-3 py-2 font-semibold bg-gray-100 text-center align-middle w-32">
-                        Comprimento<br />X<br />Largura
-                      </td>
-                      {[
-                        { score: 0, label: '0 cm²' },
-                        { score: 1, label: '< 0.3 cm²' },
-                        { score: 2, label: '0.3-0.6 cm²' },
-                        { score: 3, label: '0.7-1.0 cm²' },
-                        { score: 4, label: '1.1-2.0 cm²' },
-                        { score: 5, label: '2.1-3.0 cm²' },
-                        { score: 6, label: '3.1-4.0 cm²' },
-                        { score: 7, label: '4.1-8.0 cm²' },
-                        { score: 8, label: '8.1-12.0 cm²' },
-                        { score: 9, label: '12.1-24.0 cm²' },
-                        { score: 10, label: '>24.0 cm²' },
-                      ].map((item) => (
-                        <td
-                          key={item.score}
-                          className="border border-gray-300 px-2 py-2 text-center text-xs bg-gray-200 text-gray-400"
-                        >
-                          <div className="font-semibold">{item.score}</div>
-                          <div className="whitespace-nowrap">{item.label}</div>
-                        </td>
-                      ))}
-                    </tr>
-
-                    <tr>
-                      <td className="border border-gray-300 px-3 py-2 font-semibold text-center bg-gray-100 w-32">
-                        Quantidade<br />Exsudato
-                      </td>
-                      {[
-                        { score: 0, label: 'Ausente' },
-                        { score: 1, label: 'Pequena' },
-                        { score: 2, label: 'Moderada' },
-                        { score: 3, label: 'Grande' },
-                      ].map((item) => {
-                        const exudateScore = getPushExudateScore(tissueResult?.xgboost_slough_amount);
-                        const isHighlighted = exudateScore === item.score;
-                        const exudateLevel = getExudateLevelFromScore(item.score);
-                        const colorClasses = getExudateColor(exudateLevel);
-                        return (
-                          <td
-                            key={item.score}
-                            className={`border border-gray-300 px-2 py-2 text-center text-xs ${
-                              isHighlighted
-                                ? `${colorClasses} font-bold`
-                                : 'bg-white text-gray-700'
-                            }`}
-                          >
-                            <div className="font-semibold">{item.score}</div>
-                            <div>{item.label}</div>
-                          </td>
-                        );
-                      })}
-                      {[4, 5, 6, 7, 8, 9, 10].map((score) => (
-                        <td key={score} className="border border-gray-300 bg-gray-100"></td>
-                      ))}
-                    </tr>
-
-                    <tr>
-                      <td className="border border-gray-300 px-3 py-2 font-semibold text-center bg-gray-100 w-32">
-                        Tipo de<br />Tecido
-                      </td>
-                      {[
-                        { score: 0, label: 'Ferida\nFechada' },
-                        { score: 1, label: 'Tecido\nEpitelial' },
-                        { score: 2, label: 'Tecido de\nGranulação' },
-                        { score: 3, label: 'Esfacelo' },
-                        { score: 4, label: 'Tecido\nNecrótico' },
-                      ].map((item) => {
-                        const tissueScore = getPushTissueScore(
-                          tissueResult?.xgboost_tissue_type,
-                          segmentation.wound_percentage
-                        );
-                        const isHighlighted = tissueScore === item.score;
-                        const tissueType = getTissueTypeFromScore(item.score);
-                        const colorClasses = getTissueColor(tissueType);
-                        return (
-                          <td
-                            key={item.score}
-                            className={`border border-gray-300 px-2 py-2 text-center text-xs ${
-                              isHighlighted
-                                ? `${colorClasses} font-bold`
-                                : 'bg-white text-gray-700'
-                            }`}
-                          >
-                            <div className="font-semibold">{item.score}</div>
-                            <div className="whitespace-pre-line">{item.label}</div>
-                          </td>
-                        );
-                      })}
-                      {[5, 6, 7, 8, 9, 10].map((score) => (
-                        <td key={score} className="border border-gray-300 bg-gray-100"></td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="mt-4 text-sm text-gray-600">
-                <p className="font-medium mb-2">Legenda:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>A célula destacada em <span className="font-semibold">negrito</span> indica o valor detectado</li>
-                  <li>A linha de Comprimento X Largura está desabilitada (valores não calculados)</li>
-                </ul>
+          {(surgwoundExudate !== null ||
+            surgwoundHealing !== null ||
+            surgwoundInfection !== null) && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-4">
+              <h2 className="text-xl font-semibold text-gray-800">SurgWound</h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <SurgwoundModalityPanel result={surgwoundExudate} compact={false} />
+                <SurgwoundModalityPanel result={surgwoundHealing} compact={false} />
+                <SurgwoundModalityPanel result={surgwoundInfection} compact={false} />
               </div>
             </div>
           )}
