@@ -22,9 +22,64 @@ interface DeepskinResult {
   pwat_score: number;
 }
 
+interface FpResult {
+  predicted_class: string;
+  needs_retry_photo: boolean;
+  probabilities: Record<string, number>;
+}
+
+interface SurgWoundResult {
+  modality: string;
+  predicted_index: number;
+  predicted_label: string;
+  confidence: number;
+  probabilities: Record<string, number>;
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+/**
+ * TISSUE_LABELS from api-htm/xgboost_inference.py (same order as model classes).
+ * Keys are normalized with .toLowerCase() before lookup.
+ */
+const TISSUE_TYPE_LABEL_PT: Record<string, string> = {
+  esfacelo: 'Esfacelo',
+  granulação: 'Granulação',
+  epitelial: 'Epitelial',
+  necrotic: 'Tecido necrótico',
+};
+
+/**
+ * EXUDATE_LABELS from api-htm/xgboost_inference.py.
+ * Display wording aligned with the PUSH exudate row on this page.
+ */
+const EXUDATE_AMOUNT_LABEL_PT: Record<string, string> = {
+  none: 'Ausente',
+  low: 'Pequena',
+  medium: 'Moderada',
+  high: 'Grande',
+};
+
+function mapApiStringToPtDisplayLabel(
+  rawValue: string | null | undefined,
+  labelTable: Record<string, string>
+): string {
+  if (rawValue === null || rawValue === undefined) {
+    return 'Desconhecido';
+  }
+  const trimmed = rawValue.trim();
+  if (trimmed === '') {
+    return 'Desconhecido';
+  }
+  const normalizedKey = trimmed.toLowerCase();
+  const mapped = labelTable[normalizedKey];
+  if (mapped !== undefined) {
+    return mapped;
+  }
+  return trimmed;
+}
 
 export default function PipelineDemoPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -34,6 +89,11 @@ export default function PipelineDemoPage() {
   const [segmentation, setSegmentation] = useState<SegmentationResult | null>(null);
   const [tissueResult, setTissueResult] = useState<TissueResult | null>(null);
   const [deepskinResult, setDeepskinResult] = useState<DeepskinResult | null>(null);
+  const [fpResult, setFpResult] = useState<FpResult | null>(null);
+  const [exudateTypeResult, setExudateTypeResult] = useState<SurgWoundResult | null>(null);
+  const [healingStatusResult, setHealingStatusResult] = useState<SurgWoundResult | null>(null);
+  const [infectionRiskResult, setInfectionRiskResult] = useState<SurgWoundResult | null>(null);
+  const [fpAdvice, setFpAdvice] = useState<string | null>(null);
   const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [apiUrl, setApiUrl] = useState<string | null>(null);
@@ -157,6 +217,11 @@ export default function PipelineDemoPage() {
         setSegmentation(null);
         setTissueResult(null);
         setDeepskinResult(null);
+        setFpResult(null);
+        setExudateTypeResult(null);
+        setHealingStatusResult(null);
+        setInfectionRiskResult(null);
+        setFpAdvice(null);
         setMaskImageUrl(null);
         setError(null);
       } catch (err) {
@@ -244,6 +309,11 @@ export default function PipelineDemoPage() {
     setError(null);
     setSegmentation(null);
     setTissueResult(null);
+    setFpResult(null);
+    setExudateTypeResult(null);
+    setHealingStatusResult(null);
+    setInfectionRiskResult(null);
+    setFpAdvice(null);
     setMaskImageUrl(null);
 
     try {
@@ -251,7 +321,35 @@ export default function PipelineDemoPage() {
       setLoadingStep('Convertendo imagem...');
       const base64Image = await fileToBase64(selectedFile);
 
-      // Step 2: Run segmentation
+      // Step 2: Run FP pre-check before segmentation
+      setLoadingStep('Executando pré-checagem FP...');
+      const fpResponse = await fetch(`${apiUrl}/fp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: base64Image }),
+      });
+
+      if (!fpResponse.ok) {
+        throw new Error('Falha ao executar pré-checagem FP');
+      }
+
+      const fpData: FpResult = await fpResponse.json();
+      setFpResult(fpData);
+
+      const majorityClass = Object.entries(fpData.probabilities).reduce(
+        (bestClass, currentClass) => (currentClass[1] > bestClass[1] ? currentClass : bestClass),
+        ['', -Infinity] as [string, number]
+      )[0];
+
+      if (majorityClass === 'other') {
+        setFpAdvice('A imagem foi classificada majoritariamente como "other". Recomendamos retirar a foto e tentar novamente.');
+      } else {
+        setFpAdvice(null);
+      }
+
+      // Step 3: Run segmentation
       setLoadingStep('Executando segmentação da ferida...');
       const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
         method: 'POST',
@@ -268,7 +366,7 @@ export default function PipelineDemoPage() {
       const segmentationData: SegmentationResult = await segmentationResponse.json();
       setSegmentation(segmentationData);
 
-      // Step 3: Run tissue classification only if wound area > 0%
+      // Step 4: Run tissue classification only if wound area > 0%
       if (segmentationData.wound_percentage > 0) {
         setLoadingStep('Executando classificação de tecido e análise deepskin...');
 
@@ -297,6 +395,46 @@ export default function PipelineDemoPage() {
         setTissueResult(tissueData);
         setDeepskinResult(deepskinData);
       }
+
+      // Step 5: Run SurgWound modality predictions
+      setLoadingStep('Executando classificação SurgWound...');
+      const [exudateResponse, healingResponse, infectionResponse] = await Promise.all([
+        fetch(`${apiUrl}/surgwound/exudate-type`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image }),
+        }),
+        fetch(`${apiUrl}/surgwound/healing-status`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image }),
+        }),
+        fetch(`${apiUrl}/surgwound/infection-risk-assessment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image }),
+        }),
+      ]);
+
+      if (!exudateResponse.ok || !healingResponse.ok || !infectionResponse.ok) {
+        throw new Error('Falha ao executar classificação SurgWound');
+      }
+
+      const [exudateData, healingData, infectionData] = await Promise.all([
+        exudateResponse.json() as Promise<SurgWoundResult>,
+        healingResponse.json() as Promise<SurgWoundResult>,
+        infectionResponse.json() as Promise<SurgWoundResult>,
+      ]);
+
+      setExudateTypeResult(exudateData);
+      setHealingStatusResult(healingData);
+      setInfectionRiskResult(infectionData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido ocorreu');
     } finally {
@@ -309,6 +447,11 @@ export default function PipelineDemoPage() {
     setSegmentation(null);
     setTissueResult(null);
     setDeepskinResult(null);
+    setFpResult(null);
+    setExudateTypeResult(null);
+    setHealingStatusResult(null);
+    setInfectionRiskResult(null);
+    setFpAdvice(null);
     setMaskImageUrl(null);
     setSelectedFile(null);
     setPreviewUrl(null);
@@ -467,6 +610,28 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
+          {/* FP Pre-check Result */}
+          {fpResult && (
+            <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+              <h2 className="text-base font-semibold text-gray-800 mb-3">
+                Pré-checagem FP
+              </h2>
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>
+                  <span className="font-medium">Classe prevista:</span> {fpResult.predicted_class}
+                </p>
+                <p>
+                  <span className="font-medium">Precisa refazer foto:</span> {fpResult.needs_retry_photo ? 'Sim' : 'Não'}
+                </p>
+              </div>
+              {fpAdvice && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3 mt-3 rounded">
+                  <p className="text-xs text-yellow-800">{fpAdvice}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Segmentation Results */}
           {segmentation && maskImageUrl && (
             <div className="bg-white rounded-lg shadow-md p-4 mb-4">
@@ -547,14 +712,14 @@ export default function PipelineDemoPage() {
                 <div>
                   <p className="text-xs font-medium text-gray-600 mb-2">Tipo de Tecido</p>
                   <div className={`px-4 py-3 rounded-lg text-center font-semibold ${getTissueColor(tissueResult.xgboost_tissue_type)}`}>
-                    {tissueResult.xgboost_tissue_type || 'Desconhecido'}
+                    {mapApiStringToPtDisplayLabel(tissueResult.xgboost_tissue_type, TISSUE_TYPE_LABEL_PT)}
                   </div>
                 </div>
 
                 <div>
                   <p className="text-xs font-medium text-gray-600 mb-2">Exsudato</p>
                   <div className={`px-4 py-3 rounded-lg text-center font-semibold ${getExudateColor(tissueResult.xgboost_slough_amount)}`}>
-                    {tissueResult.xgboost_slough_amount || 'Desconhecido'}
+                    {mapApiStringToPtDisplayLabel(tissueResult.xgboost_slough_amount, EXUDATE_AMOUNT_LABEL_PT)}
                   </div>
                 </div>
               </div>
@@ -578,82 +743,32 @@ export default function PipelineDemoPage() {
 
           {/* PUSH Scale */}
           {segmentation && (tissueResult || segmentation.wound_percentage === 0) && (
+          {(exudateTypeResult || healingStatusResult || infectionRiskResult) && (
             <div className="bg-white rounded-lg shadow-md p-4 mb-4">
               <h2 className="text-base font-semibold text-gray-800 mb-3">
-                Escala PUSH
+                Informações de acompanhamento
               </h2>
 
-              {/* Exudate Amount */}
-              <div className="mb-4">
-                <p className="text-xs font-semibold text-gray-700 mb-2">Quantidade de Exsudato</p>
-                <div className="grid grid-cols-4 gap-1">
-                  {[
-                    { score: 0, label: 'Ausente' },
-                    { score: 1, label: 'Pequena' },
-                    { score: 2, label: 'Moderada' },
-                    { score: 3, label: 'Grande' },
-                  ].map((item) => {
-                    const exudateScore = getPushExudateScore(tissueResult?.xgboost_slough_amount);
-                    const isHighlighted = exudateScore === item.score;
-                    const exudateLevel = getExudateLevelFromScore(item.score);
-                    const colorClasses = getExudateColor(exudateLevel);
-                    return (
-                      <div
-                        key={item.score}
-                        className={`border border-gray-300 p-2 rounded text-center ${
-                          isHighlighted
-                            ? `${colorClasses} font-bold border-2 border-gray-800`
-                            : 'bg-white text-gray-700'
-                        }`}
-                      >
-                        <div className="text-lg font-bold">{item.score}</div>
-                        <div className="text-xs mt-1">{item.label}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="space-y-2 text-sm text-gray-700">
+                {exudateTypeResult && (
+                  <p>
+                    <span className="font-medium">Exsudato:</span> {exudateTypeResult.predicted_label} ({(exudateTypeResult.confidence * 100).toFixed(1)}%)
+                  </p>
+                )}
+                {healingStatusResult && (
+                  <p>
+                    <span className="font-medium">Cicatrização:</span> {healingStatusResult.predicted_label} ({(healingStatusResult.confidence * 100).toFixed(1)}%)
+                  </p>
+                )}
+                {infectionRiskResult && (
+                  <p>
+                    <span className="font-medium">Risco de infecção:</span> {infectionRiskResult.predicted_label} ({(infectionRiskResult.confidence * 100).toFixed(1)}%)
+                  </p>
+                )}
               </div>
-
-              {/* Tissue Type */}
-              <div>
-                <p className="text-xs font-semibold text-gray-700 mb-2">Tipo de Tecido</p>
-                <div className="grid grid-cols-2 gap-1">
-                  {[
-                    { score: 0, label: 'Ferida Fechada' },
-                    { score: 1, label: 'Epitelial' },
-                    { score: 2, label: 'Granulação' },
-                    { score: 3, label: 'Esfacelo' },
-                    { score: 4, label: 'Necrótico' },
-                  ].map((item) => {
-                    const tissueScore = getPushTissueScore(
-                      tissueResult?.xgboost_tissue_type,
-                      segmentation.wound_percentage
-                    );
-                    const isHighlighted = tissueScore === item.score;
-                    const tissueType = getTissueTypeFromScore(item.score);
-                    const colorClasses = getTissueColor(tissueType);
-                    return (
-                      <div
-                        key={item.score}
-                        className={`border border-gray-300 p-2 rounded text-center ${
-                          isHighlighted
-                            ? `${colorClasses} font-bold border-2 border-gray-800`
-                            : 'bg-white text-gray-700'
-                        }`}
-                      >
-                        <div className="text-lg font-bold">{item.score}</div>
-                        <div className="text-xs mt-1">{item.label}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <p className="text-xs text-gray-500 mt-3">
-                <span className="font-semibold">Nota:</span> A célula destacada indica o valor detectado
-              </p>
             </div>
           )}
+
         </div>
 
         {/* Bottom Camera Button - Fixed */}
@@ -750,6 +865,27 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
+          {fpResult && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                Pré-checagem FP
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+                <p>
+                  <span className="font-semibold">Classe prevista:</span> {fpResult.predicted_class}
+                </p>
+                <p>
+                  <span className="font-semibold">Precisa refazer foto:</span> {fpResult.needs_retry_photo ? 'Sim' : 'Não'}
+                </p>
+              </div>
+              {fpAdvice && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+                  <p className="text-yellow-800 font-medium">{fpAdvice}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {segmentation && maskImageUrl && (
             <div ref={segmentationRef} className="bg-white rounded-lg shadow-md p-6">
               <div className="flex justify-between items-start mb-4">
@@ -836,7 +972,7 @@ export default function PipelineDemoPage() {
                     <span className="text-gray-700 font-medium">Tipo de Tecido:</span>
                   </div>
                   <div className={`px-4 py-3 rounded-lg text-center font-semibold text-lg ${getTissueColor(tissueResult.xgboost_tissue_type)}`}>
-                    {tissueResult.xgboost_tissue_type || 'Desconhecido'}
+                    {mapApiStringToPtDisplayLabel(tissueResult.xgboost_tissue_type, TISSUE_TYPE_LABEL_PT)}
                   </div>
                 </div>
 
@@ -845,7 +981,7 @@ export default function PipelineDemoPage() {
                     <span className="text-gray-700 font-medium">Quantidade de Exsudato:</span>
                   </div>
                   <div className={`px-4 py-3 rounded-lg text-center font-semibold text-lg ${getExudateColor(tissueResult.xgboost_slough_amount)}`}>
-                    {tissueResult.xgboost_slough_amount || 'Desconhecido'}
+                    {mapApiStringToPtDisplayLabel(tissueResult.xgboost_slough_amount, EXUDATE_AMOUNT_LABEL_PT)}
                   </div>
                 </div>
               </div>
@@ -870,122 +1006,40 @@ export default function PipelineDemoPage() {
 
           {segmentation && (tissueResult || segmentation.wound_percentage === 0) && (
             <div ref={pushScaleRef} className="bg-white rounded-lg shadow-md p-6">
+          {(exudateTypeResult || healingStatusResult || infectionRiskResult) && (
+            <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                Escala Push
+              Informações de acompanhamento
               </h2>
 
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-300">
-                  <tbody>
-                    <tr>
-                      <td className="border border-gray-300 px-3 py-2 font-semibold bg-gray-100 text-center align-middle w-32">
-                        Comprimento<br />X<br />Largura
-                      </td>
-                      {[
-                        { score: 0, label: '0 cm²' },
-                        { score: 1, label: '< 0.3 cm²' },
-                        { score: 2, label: '0.3-0.6 cm²' },
-                        { score: 3, label: '0.7-1.0 cm²' },
-                        { score: 4, label: '1.1-2.0 cm²' },
-                        { score: 5, label: '2.1-3.0 cm²' },
-                        { score: 6, label: '3.1-4.0 cm²' },
-                        { score: 7, label: '4.1-8.0 cm²' },
-                        { score: 8, label: '8.1-12.0 cm²' },
-                        { score: 9, label: '12.1-24.0 cm²' },
-                        { score: 10, label: '>24.0 cm²' },
-                      ].map((item) => (
-                        <td
-                          key={item.score}
-                          className="border border-gray-300 px-2 py-2 text-center text-xs bg-gray-200 text-gray-400"
-                        >
-                          <div className="font-semibold">{item.score}</div>
-                          <div className="whitespace-nowrap">{item.label}</div>
-                        </td>
-                      ))}
-                    </tr>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-700">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="font-semibold mb-2">Exsudato</p>
+                  <p>{exudateTypeResult?.predicted_label ?? 'N/A'}</p>
+                  {exudateTypeResult && (
+                    <p className="text-xs text-gray-500 mt-1">Confiança: {(exudateTypeResult.confidence * 100).toFixed(1)}%</p>
+                  )}
+                </div>
 
-                    <tr>
-                      <td className="border border-gray-300 px-3 py-2 font-semibold text-center bg-gray-100 w-32">
-                        Quantidade<br />Exsudato
-                      </td>
-                      {[
-                        { score: 0, label: 'Ausente' },
-                        { score: 1, label: 'Pequena' },
-                        { score: 2, label: 'Moderada' },
-                        { score: 3, label: 'Grande' },
-                      ].map((item) => {
-                        const exudateScore = getPushExudateScore(tissueResult?.xgboost_slough_amount);
-                        const isHighlighted = exudateScore === item.score;
-                        const exudateLevel = getExudateLevelFromScore(item.score);
-                        const colorClasses = getExudateColor(exudateLevel);
-                        return (
-                          <td
-                            key={item.score}
-                            className={`border border-gray-300 px-2 py-2 text-center text-xs ${
-                              isHighlighted
-                                ? `${colorClasses} font-bold`
-                                : 'bg-white text-gray-700'
-                            }`}
-                          >
-                            <div className="font-semibold">{item.score}</div>
-                            <div>{item.label}</div>
-                          </td>
-                        );
-                      })}
-                      {[4, 5, 6, 7, 8, 9, 10].map((score) => (
-                        <td key={score} className="border border-gray-300 bg-gray-100"></td>
-                      ))}
-                    </tr>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="font-semibold mb-2">Cicatrização</p>
+                  <p>{healingStatusResult?.predicted_label ?? 'N/A'}</p>
+                  {healingStatusResult && (
+                    <p className="text-xs text-gray-500 mt-1">Confiança: {(healingStatusResult.confidence * 100).toFixed(1)}%</p>
+                  )}
+                </div>
 
-                    <tr>
-                      <td className="border border-gray-300 px-3 py-2 font-semibold text-center bg-gray-100 w-32">
-                        Tipo de<br />Tecido
-                      </td>
-                      {[
-                        { score: 0, label: 'Ferida\nFechada' },
-                        { score: 1, label: 'Tecido\nEpitelial' },
-                        { score: 2, label: 'Tecido de\nGranulação' },
-                        { score: 3, label: 'Esfacelo' },
-                        { score: 4, label: 'Tecido\nNecrótico' },
-                      ].map((item) => {
-                        const tissueScore = getPushTissueScore(
-                          tissueResult?.xgboost_tissue_type,
-                          segmentation.wound_percentage
-                        );
-                        const isHighlighted = tissueScore === item.score;
-                        const tissueType = getTissueTypeFromScore(item.score);
-                        const colorClasses = getTissueColor(tissueType);
-                        return (
-                          <td
-                            key={item.score}
-                            className={`border border-gray-300 px-2 py-2 text-center text-xs ${
-                              isHighlighted
-                                ? `${colorClasses} font-bold`
-                                : 'bg-white text-gray-700'
-                            }`}
-                          >
-                            <div className="font-semibold">{item.score}</div>
-                            <div className="whitespace-pre-line">{item.label}</div>
-                          </td>
-                        );
-                      })}
-                      {[5, 6, 7, 8, 9, 10].map((score) => (
-                        <td key={score} className="border border-gray-300 bg-gray-100"></td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="mt-4 text-sm text-gray-600">
-                <p className="font-medium mb-2">Legenda:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>A célula destacada em <span className="font-semibold">negrito</span> indica o valor detectado</li>
-                  <li>A linha de Comprimento X Largura está desabilitada (valores não calculados)</li>
-                </ul>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="font-semibold mb-2">Risco de infecção</p>
+                  <p>{infectionRiskResult?.predicted_label ?? 'N/A'}</p>
+                  {infectionRiskResult && (
+                    <p className="text-xs text-gray-500 mt-1">Confiança: {(infectionRiskResult.confidence * 100).toFixed(1)}%</p>
+                  )}
+                </div>
               </div>
             </div>
           )}
+
         </div>
       </div>
     </>
