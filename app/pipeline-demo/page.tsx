@@ -385,18 +385,21 @@ export default function PipelineDemoPage() {
   }, [sizeMeasurement]);
 
   const createMaskImage = (mask: number[][], width: number, height: number) => {
+    const w = Number.isFinite(width) && width > 0 ? Math.round(width) : mask[0]?.length ?? 0;
+    const h = Number.isFinite(height) && height > 0 ? Math.round(height) : mask.length ?? 0;
+    if (w <= 0 || h <= 0) return;
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext('2d');
     
     if (!ctx) return;
     
-    const imageData = ctx.createImageData(width, height);
+    const imageData = ctx.createImageData(w, h);
     
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
         const maskValue = mask[y][x];
         
         if (maskValue > 0) {
@@ -423,18 +426,21 @@ export default function PipelineDemoPage() {
     width: number,
     height: number
   ) => {
+    const w = Number.isFinite(width) && width > 0 ? Math.round(width) : dfuMask[0]?.length ?? 0;
+    const h = Number.isFinite(height) && height > 0 ? Math.round(height) : dfuMask.length ?? 0;
+    if (w <= 0 || h <= 0) return;
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext('2d');
     
     if (!ctx) return;
     
-    const imageData = ctx.createImageData(width, height);
+    const imageData = ctx.createImageData(w, h);
     
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
         const dfuValue = dfuMask[y]?.[x] ?? 0;
         const nailValue = nailMask ? (nailMask[y]?.[x] ?? 0) : 0;
         
