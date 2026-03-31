@@ -373,6 +373,17 @@ export default function PipelineDemoPage() {
     }
   }, [tissueResult]);
 
+  useEffect(() => {
+    if (sizeMeasurement && sizeMeasurement.dfu_mask) {
+      createCombinedMaskImage(
+        sizeMeasurement.dfu_mask,
+        sizeMeasurement.nail_mask,
+        sizeMeasurement.original_width,
+        sizeMeasurement.original_height
+      );
+    }
+  }, [sizeMeasurement]);
+
   const createMaskImage = (mask: number[][], width: number, height: number) => {
     const canvas = document.createElement('canvas');
     canvas.width = width;
