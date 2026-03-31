@@ -406,6 +406,53 @@ export default function PipelineDemoPage() {
     setMaskImageUrl(canvas.toDataURL());
   };
 
+  const createCombinedMaskImage = (
+    dfuMask: number[][],
+    nailMask: number[][] | null,
+    width: number,
+    height: number
+  ) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return;
+    
+    const imageData = ctx.createImageData(width, height);
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        const dfuValue = dfuMask[y]?.[x] ?? 0;
+        const nailValue = nailMask ? (nailMask[y]?.[x] ?? 0) : 0;
+        
+        if (dfuValue > 0) {
+          // Wound: Blue
+          imageData.data[idx] = 0;
+          imageData.data[idx + 1] = 0;
+          imageData.data[idx + 2] = 255;
+          imageData.data[idx + 3] = 180;
+        } else if (nailValue > 0) {
+          // Nail: Green
+          imageData.data[idx] = 0;
+          imageData.data[idx + 1] = 255;
+          imageData.data[idx + 2] = 0;
+          imageData.data[idx + 3] = 180;
+        } else {
+          // Transparent
+          imageData.data[idx] = 0;
+          imageData.data[idx + 1] = 0;
+          imageData.data[idx + 2] = 0;
+          imageData.data[idx + 3] = 0;
+        }
+      }
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    setCombinedMaskImageUrl(canvas.toDataURL());
+  };
+
   const handleUploadAndPredict = async () => {
     if (!selectedFile) {
       setError('Por favor, selecione uma imagem primeiro');
