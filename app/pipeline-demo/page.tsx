@@ -481,22 +481,94 @@ export default function PipelineDemoPage() {
       setLoadingStep('Convertendo imagem...');
       const base64Image = await fileToBase64(selectedFile);
 
-      // Step 2: Run segmentation
-      setLoadingStep('Executando segmentação da ferida...');
-      const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ image: base64Image }),
-      });
+      // Step 2: Run size measurement (includes segmentation + nail detection)
+      setLoadingStep('Analisando imagem e detectando unha...');
+      setSizeMeasurement(null);
+      setCombinedMaskImageUrl(null);
+      setNailWarning(null);
 
-      if (!segmentationResponse.ok) {
-        throw new Error('Falha ao executar segmentação');
+      let sizeMeasurementData: SizeMeasurementResult | null = null;
+      let segmentationData: SegmentationResult | null = null;
+
+      try {
+        const sizeMeasurementResponse = await fetch(`${apiUrl}/size-measurement`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image, include_masks: true }),
+        });
+
+        if (sizeMeasurementResponse.ok) {
+          sizeMeasurementData = await sizeMeasurementResponse.json();
+          setSizeMeasurement(sizeMeasurementData);
+          
+          if (sizeMeasurementData && sizeMeasurementData.dfu_mask) {
+            // Create combined mask with both wound and nail
+            createCombinedMaskImage(
+              sizeMeasurementData.dfu_mask,
+              sizeMeasurementData.nail_mask,
+              sizeMeasurementData.original_width,
+              sizeMeasurementData.original_height
+            );
+            
+            // Also set segmentation for backward compatibility with tissue classification
+            segmentationData = {
+              mask: sizeMeasurementData.dfu_mask,
+              original_width: sizeMeasurementData.original_width,
+              original_height: sizeMeasurementData.original_height,
+              wound_pixels: 0, // Will be calculated from mask if needed
+              total_pixels: sizeMeasurementData.original_width * sizeMeasurementData.original_height,
+              wound_percentage: sizeMeasurementData.dfu_detected ? 
+                (sizeMeasurementData.dfu_area_mm2 / (sizeMeasurementData.original_width * sizeMeasurementData.original_height / (sizeMeasurementData.px_per_mm * sizeMeasurementData.px_per_mm))) * 100 : 0,
+            };
+            setSegmentation(segmentationData);
+          }
+        } else {
+          // Size measurement failed (likely no nail detected), fallback to segmentation
+          const errorData = await sizeMeasurementResponse.json().catch(() => ({}));
+          console.log('Size measurement response:', errorData);
+          
+          setNailWarning('Unha não detectada na imagem. Não foi possível calcular o tamanho real da ferida.');
+          
+          // Fallback to regular segmentation
+          setLoadingStep('Executando segmentação da ferida...');
+          const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ image: base64Image }),
+          });
+
+          if (!segmentationResponse.ok) {
+            throw new Error('Falha ao executar segmentação');
+          }
+
+          segmentationData = await segmentationResponse.json();
+          setSegmentation(segmentationData);
+        }
+      } catch (sizeMeasurementError) {
+        console.error('Size measurement error:', sizeMeasurementError);
+        setNailWarning('Unha não detectada na imagem. Não foi possível calcular o tamanho real da ferida.');
+        
+        // Fallback to regular segmentation
+        setLoadingStep('Executando segmentação da ferida...');
+        const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image }),
+        });
+
+        if (!segmentationResponse.ok) {
+          throw new Error('Falha ao executar segmentação');
+        }
+
+        segmentationData = await segmentationResponse.json();
+        setSegmentation(segmentationData);
       }
-
-      const segmentationData: SegmentationResult = await segmentationResponse.json();
-      setSegmentation(segmentationData);
 
       const ingestSurgwoundTriplet = async (
         exOutcome: FetchOutcome,
@@ -532,8 +604,9 @@ export default function PipelineDemoPage() {
 
       const surgwoundRequestBody: string = JSON.stringify({ image: base64Image });
 
-      // Step 3: Run tissue classification only if wound area > 0%
-      if (segmentationData.wound_percentage > 0) {
+      // Step 3: Run tissue classification only if wound area > 0% and we have a mask
+      const woundDetected = sizeMeasurementData?.dfu_detected ?? (segmentationData?.wound_percentage ?? 0) > 0;
+      if (woundDetected && segmentationData && segmentationData.mask) {
         setLoadingStep(
           'Executando tecido, Deepskin e classificações SurgWound...'
         );
