@@ -29,6 +29,28 @@ interface SurgwoundModalityResult {
   probabilities: Record<string, number>;
 }
 
+interface SizeMeasurementResult {
+  dfu_area_cm2: number;
+  dfu_area_mm2: number;
+  nail_area_mm2: number;
+  px_per_mm: number;
+  nail_detected: boolean;
+  dfu_detected: boolean;
+  calibration_source: 'user_provided' | 'population_average';
+  dfu_dimensions: {
+    length_mm: number;
+    width_mm: number;
+  };
+  nail_dimensions: {
+    length_mm: number;
+    width_mm: number;
+  };
+  nail_mask: number[][];
+  dfu_mask: number[][];
+  original_width: number;
+  original_height: number;
+}
+
 interface FetchOutcome {
   response: Response | null;
   networkError: Error | null;
@@ -189,6 +211,9 @@ export default function PipelineDemoPage() {
   );
   const [surgwoundWarning, setSurgwoundWarning] = useState<string | null>(null);
   const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
+  const [sizeMeasurement, setSizeMeasurement] = useState<SizeMeasurementResult | null>(null);
+  const [combinedMaskImageUrl, setCombinedMaskImageUrl] = useState<string | null>(null);
+  const [nailWarning, setNailWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [apiUrl, setApiUrl] = useState<string | null>(null);
   const segmentationRef = useRef<HTMLDivElement>(null);
@@ -316,6 +341,9 @@ export default function PipelineDemoPage() {
         setSurgwoundInfection(null);
         setSurgwoundWarning(null);
         setMaskImageUrl(null);
+        setSizeMeasurement(null);
+        setCombinedMaskImageUrl(null);
+        setNailWarning(null);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to process image');
@@ -344,6 +372,17 @@ export default function PipelineDemoPage() {
       }, 100);
     }
   }, [tissueResult]);
+
+  useEffect(() => {
+    if (sizeMeasurement && sizeMeasurement.dfu_mask) {
+      createCombinedMaskImage(
+        sizeMeasurement.dfu_mask,
+        sizeMeasurement.nail_mask,
+        sizeMeasurement.original_width,
+        sizeMeasurement.original_height
+      );
+    }
+  }, [sizeMeasurement]);
 
   const createMaskImage = (mask: number[][], width: number, height: number) => {
     const canvas = document.createElement('canvas');
@@ -378,6 +417,53 @@ export default function PipelineDemoPage() {
     setMaskImageUrl(canvas.toDataURL());
   };
 
+  const createCombinedMaskImage = (
+    dfuMask: number[][],
+    nailMask: number[][] | null,
+    width: number,
+    height: number
+  ) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return;
+    
+    const imageData = ctx.createImageData(width, height);
+    
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        const dfuValue = dfuMask[y]?.[x] ?? 0;
+        const nailValue = nailMask ? (nailMask[y]?.[x] ?? 0) : 0;
+        
+        if (dfuValue > 0) {
+          // Wound: Blue
+          imageData.data[idx] = 0;
+          imageData.data[idx + 1] = 0;
+          imageData.data[idx + 2] = 255;
+          imageData.data[idx + 3] = 180;
+        } else if (nailValue > 0) {
+          // Nail: Green
+          imageData.data[idx] = 0;
+          imageData.data[idx + 1] = 255;
+          imageData.data[idx + 2] = 0;
+          imageData.data[idx + 3] = 180;
+        } else {
+          // Transparent
+          imageData.data[idx] = 0;
+          imageData.data[idx + 1] = 0;
+          imageData.data[idx + 2] = 0;
+          imageData.data[idx + 3] = 0;
+        }
+      }
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    setCombinedMaskImageUrl(canvas.toDataURL());
+  };
+
   const handleUploadAndPredict = async () => {
     if (!selectedFile) {
       setError('Por favor, selecione uma imagem primeiro');
@@ -400,28 +486,100 @@ export default function PipelineDemoPage() {
     setSegmentation(null);
     setTissueResult(null);
     setMaskImageUrl(null);
+    setSizeMeasurement(null);
+    setCombinedMaskImageUrl(null);
+    setNailWarning(null);
 
     try {
       // Step 1: Convert image to base64
       setLoadingStep('Convertendo imagem...');
       const base64Image = await fileToBase64(selectedFile);
 
-      // Step 2: Run segmentation
-      setLoadingStep('Executando segmentação da ferida...');
-      const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ image: base64Image }),
-      });
+      // Step 2: Run size measurement (includes segmentation + nail detection)
+      setLoadingStep('Analisando imagem e detectando unha...');
 
-      if (!segmentationResponse.ok) {
-        throw new Error('Falha ao executar segmentação');
+      let sizeMeasurementData: SizeMeasurementResult | null = null;
+      let segmentationData: SegmentationResult | null = null;
+
+      try {
+        const sizeMeasurementResponse = await fetch(`${apiUrl}/size-measurement`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image, include_masks: true }),
+        });
+
+        if (sizeMeasurementResponse.ok) {
+          sizeMeasurementData = await sizeMeasurementResponse.json();
+          setSizeMeasurement(sizeMeasurementData);
+          
+          if (sizeMeasurementData && sizeMeasurementData.dfu_mask) {
+            // Create combined mask with both wound and nail
+            createCombinedMaskImage(
+              sizeMeasurementData.dfu_mask,
+              sizeMeasurementData.nail_mask,
+              sizeMeasurementData.original_width,
+              sizeMeasurementData.original_height
+            );
+            
+            // Also set segmentation for backward compatibility with tissue classification
+            segmentationData = {
+              mask: sizeMeasurementData.dfu_mask,
+              original_width: sizeMeasurementData.original_width,
+              original_height: sizeMeasurementData.original_height,
+              wound_pixels: 0, // Will be calculated from mask if needed
+              total_pixels: sizeMeasurementData.original_width * sizeMeasurementData.original_height,
+              wound_percentage: sizeMeasurementData.dfu_detected ? 
+                (sizeMeasurementData.dfu_area_mm2 / (sizeMeasurementData.original_width * sizeMeasurementData.original_height / (sizeMeasurementData.px_per_mm * sizeMeasurementData.px_per_mm))) * 100 : 0,
+            };
+            setSegmentation(segmentationData);
+          }
+        } else {
+          // Size measurement failed (likely no nail detected), fallback to segmentation
+          const errorData = await sizeMeasurementResponse.json().catch(() => ({}));
+          console.log('Size measurement response:', errorData);
+          
+          setNailWarning('Unha não detectada na imagem. Não foi possível calcular o tamanho real da ferida.');
+          
+          // Fallback to regular segmentation
+          setLoadingStep('Executando segmentação da ferida...');
+          const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ image: base64Image }),
+          });
+
+          if (!segmentationResponse.ok) {
+            throw new Error('Falha ao executar segmentação');
+          }
+
+          segmentationData = await segmentationResponse.json();
+          setSegmentation(segmentationData);
+        }
+      } catch (sizeMeasurementError) {
+        console.error('Size measurement error:', sizeMeasurementError);
+        setNailWarning('Unha não detectada na imagem. Não foi possível calcular o tamanho real da ferida.');
+        
+        // Fallback to regular segmentation
+        setLoadingStep('Executando segmentação da ferida...');
+        const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: base64Image }),
+        });
+
+        if (!segmentationResponse.ok) {
+          throw new Error('Falha ao executar segmentação');
+        }
+
+        segmentationData = await segmentationResponse.json();
+        setSegmentation(segmentationData);
       }
-
-      const segmentationData: SegmentationResult = await segmentationResponse.json();
-      setSegmentation(segmentationData);
 
       const ingestSurgwoundTriplet = async (
         exOutcome: FetchOutcome,
@@ -457,8 +615,9 @@ export default function PipelineDemoPage() {
 
       const surgwoundRequestBody: string = JSON.stringify({ image: base64Image });
 
-      // Step 3: Run tissue classification only if wound area > 0%
-      if (segmentationData.wound_percentage > 0) {
+      // Step 3: Run tissue classification only if wound area > 0% and we have a mask
+      const woundDetected = sizeMeasurementData?.dfu_detected ?? (segmentationData?.wound_percentage ?? 0) > 0;
+      if (woundDetected && segmentationData && segmentationData.mask) {
         setLoadingStep(
           'Executando tecido, Deepskin e classificações SurgWound...'
         );
@@ -596,6 +755,9 @@ export default function PipelineDemoPage() {
     setMaskImageUrl(null);
     setSelectedFile(null);
     setPreviewUrl(null);
+    setSizeMeasurement(null);
+    setCombinedMaskImageUrl(null);
+    setNailWarning(null);
   };
 
   const getTissueColor = (tissueType: string | undefined | null): string => {
@@ -666,6 +828,13 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
+          {nailWarning && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-3 mb-4 rounded">
+              <p className="text-sm text-amber-900 font-medium">Aviso</p>
+              <p className="text-xs text-amber-800 mt-1">{nailWarning}</p>
+            </div>
+          )}
+
           {/* Loading State */}
           {!apiUrl && !error && (
             <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3 mb-4 rounded">
@@ -722,7 +891,7 @@ export default function PipelineDemoPage() {
           )}
 
           {/* Segmentation Results */}
-          {segmentation && maskImageUrl && (
+          {(segmentation || sizeMeasurement) && (maskImageUrl || combinedMaskImageUrl) && (
             <div className="bg-white rounded-lg shadow-md p-4 mb-4">
               <h2 className="text-base font-semibold text-gray-800 mb-3">
                 Segmentação da Ferida
@@ -748,12 +917,23 @@ export default function PipelineDemoPage() {
                       className="w-full"
                     />
                     <img
-                      src={maskImageUrl}
+                      src={combinedMaskImageUrl || maskImageUrl || ''}
                       alt="Máscara"
                       className="absolute top-0 left-0 w-full"
                       style={{ mixBlendMode: 'multiply' }}
                     />
                   </div>
+                  {/* Legend */}
+                  {sizeMeasurement?.nail_detected && (
+                    <div className="flex gap-4 mt-2 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded bg-blue-500"></span> Ferida
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded bg-green-500"></span> Unha
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -762,27 +942,57 @@ export default function PipelineDemoPage() {
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="text-xs text-gray-600 mb-1">Área da Ferida</p>
                   <p className="text-xl font-bold text-gray-900">
-                    {segmentation.wound_percentage.toFixed(2)}%
+                    {segmentation?.wound_percentage?.toFixed(2) ?? '0.00'}%
                   </p>
-                  {segmentation.wound_percentage === 0 && (
+                  {(segmentation?.wound_percentage === 0 && !sizeMeasurement?.dfu_detected) && (
                     <p className="text-xs text-yellow-600 mt-1">
                       Nenhuma ferida detectada
                     </p>
                   )}
                 </div>
 
+                {/* Nail Detection Status */}
+                <div className={`rounded-lg p-3 ${sizeMeasurement?.nail_detected ? 'bg-green-50' : 'bg-amber-50'}`}>
+                  <p className="text-xs text-gray-600 mb-1">Detecção de Unha</p>
+                  <p className={`text-base font-bold ${sizeMeasurement?.nail_detected ? 'text-green-700' : 'text-amber-700'}`}>
+                    {sizeMeasurement?.nail_detected ? 'Detectada' : 'Não Detectada'}
+                  </p>
+                </div>
+
+                {/* Size Measurement - Only if nail detected */}
+                {sizeMeasurement?.nail_detected && sizeMeasurement?.dfu_detected && (
+                  <>
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1">Tamanho Estimado da Ferida</p>
+                      <p className="text-xl font-bold text-blue-700">
+                        {sizeMeasurement.dfu_area_cm2.toFixed(2)} cm²
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1">Tamanho da unha considerado</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {sizeMeasurement.nail_dimensions.length_mm.toFixed(1)}mm x {sizeMeasurement.nail_dimensions.width_mm.toFixed(1)}mm
+                      </p>
+                      <p className="text-xs text-amber-700 mt-2">
+                        Estimativa considera que a unha e a ferida estão à mesma distância da câmera
+                      </p>
+                    </div>
+                  </>
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs text-gray-600 mb-1">Pixels</p>
                     <p className="text-base font-bold text-gray-900">
-                      {segmentation.wound_pixels.toLocaleString()}
+                      {segmentation?.wound_pixels?.toLocaleString() ?? '0'}
                     </p>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs text-gray-600 mb-1">Tamanho</p>
                     <p className="text-base font-bold text-gray-900">
-                      {segmentation.original_width}x{segmentation.original_height}
+                      {segmentation?.original_width ?? sizeMeasurement?.original_width ?? 0}x{segmentation?.original_height ?? sizeMeasurement?.original_height ?? 0}
                     </p>
                   </div>
                 </div>
@@ -948,7 +1158,14 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
-          {segmentation && maskImageUrl && (
+          {nailWarning && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <h3 className="text-amber-900 font-semibold mb-1">Aviso</h3>
+              <p className="text-amber-800">{nailWarning}</p>
+            </div>
+          )}
+
+          {(segmentation || sizeMeasurement) && (maskImageUrl || combinedMaskImageUrl) && (
             <div ref={segmentationRef} className="bg-white rounded-lg shadow-md p-6">
               <div className="flex justify-between items-start mb-4">
                 <h2 className="text-xl font-semibold text-gray-800">
@@ -983,42 +1200,94 @@ export default function PipelineDemoPage() {
                       className="h-auto w-full"
                     />
                     <img
-                      src={maskImageUrl}
+                      src={combinedMaskImageUrl || maskImageUrl || ''}
                       alt="Máscara"
                       className="absolute top-0 left-0 h-auto w-full"
                       style={{ mixBlendMode: 'multiply' }}
                     />
                   </div>
+                  {/* Legend */}
+                  {sizeMeasurement?.nail_detected && (
+                    <div className="flex gap-4 mt-2 text-sm text-gray-600">
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded bg-blue-500"></span> Ferida
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded bg-green-500"></span> Unha
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Área da Ferida</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {segmentation.wound_percentage.toFixed(2)}%
+                    {segmentation?.wound_percentage?.toFixed(2) ?? '0.00'}%
                   </p>
-                  {segmentation.wound_percentage === 0 && (
+                  {(segmentation?.wound_percentage === 0 && !sizeMeasurement?.dfu_detected) && (
                     <p className="text-xs text-yellow-600 mt-2">
-                      Nenhuma ferida detectada. Pipeline interrompido.
+                      Nenhuma ferida detectada
                     </p>
                   )}
+                </div>
+
+                <div className={`rounded-lg p-4 ${sizeMeasurement?.nail_detected ? 'bg-green-50' : 'bg-amber-50'}`}>
+                  <p className="text-sm text-gray-600 mb-1">Detecção de Unha</p>
+                  <p className={`text-2xl font-bold ${sizeMeasurement?.nail_detected ? 'text-green-700' : 'text-amber-700'}`}>
+                    {sizeMeasurement?.nail_detected ? 'Detectada' : 'Não Detectada'}
+                  </p>
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Pixels da Ferida</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {segmentation.wound_pixels.toLocaleString()}
+                    {segmentation?.wound_pixels?.toLocaleString() ?? '0'}
                   </p>
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Tamanho da Imagem</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {segmentation.original_width}x{segmentation.original_height}
+                    {segmentation?.original_width ?? sizeMeasurement?.original_width ?? 0}x{segmentation?.original_height ?? sizeMeasurement?.original_height ?? 0}
                   </p>
                 </div>
               </div>
+
+              {/* Size Measurement Section - Only if nail detected */}
+              {sizeMeasurement?.nail_detected && sizeMeasurement?.dfu_detected && (
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Medição de Tamanho</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                      <p className="text-sm font-medium text-blue-800 mb-1">Tamanho Estimado da Ferida</p>
+                      <p className="text-3xl font-bold text-blue-900">
+                        {sizeMeasurement.dfu_area_cm2.toFixed(2)} cm²
+                      </p>
+                      <p className="text-sm text-blue-700 mt-1">
+                        ({sizeMeasurement.dfu_dimensions.length_mm.toFixed(1)}mm x {sizeMeasurement.dfu_dimensions.width_mm.toFixed(1)}mm)
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-gray-700 mb-1">Tamanho da Unha Considerado</p>
+                      <p className="text-xl font-bold text-gray-900">
+                        {sizeMeasurement.nail_dimensions.length_mm.toFixed(1)}mm x {sizeMeasurement.nail_dimensions.width_mm.toFixed(1)}mm
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Fonte: {sizeMeasurement.calibration_source === 'user_provided' ? 'Fornecido pelo usuário' : 'Média populacional'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">Nota:</span> A estimativa de tamanho considera que a unha e a ferida estão à mesma distância da câmera.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
