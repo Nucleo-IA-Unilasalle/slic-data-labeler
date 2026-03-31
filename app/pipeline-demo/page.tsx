@@ -51,6 +51,12 @@ interface SizeMeasurementResult {
   original_height: number;
 }
 
+interface FpResult {
+  predicted_class: string;
+  needs_retry_photo: boolean;
+  probabilities: Record<string, number>;
+}
+
 interface FetchOutcome {
   response: Response | null;
   networkError: Error | null;
@@ -214,6 +220,8 @@ export default function PipelineDemoPage() {
   const [sizeMeasurement, setSizeMeasurement] = useState<SizeMeasurementResult | null>(null);
   const [combinedMaskImageUrl, setCombinedMaskImageUrl] = useState<string | null>(null);
   const [nailWarning, setNailWarning] = useState<string | null>(null);
+  const [fpResult, setFpResult] = useState<FpResult | null>(null);
+  const [fpAdvice, setFpAdvice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [apiUrl, setApiUrl] = useState<string | null>(null);
   const segmentationRef = useRef<HTMLDivElement>(null);
@@ -495,13 +503,41 @@ export default function PipelineDemoPage() {
     setSizeMeasurement(null);
     setCombinedMaskImageUrl(null);
     setNailWarning(null);
+    setFpResult(null);
+    setFpAdvice(null);
 
     try {
       // Step 1: Convert image to base64
       setLoadingStep('Convertendo imagem...');
       const base64Image = await fileToBase64(selectedFile);
 
-      // Step 2: Run size measurement (includes segmentation + nail detection)
+      // Step 2: Run FP pre-check
+      setLoadingStep('Executando pré-checagem FP...');
+      const fpResponse = await fetch(`${apiUrl}/fp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Image }),
+      });
+
+      if (!fpResponse.ok) {
+        throw new Error('Falha ao executar pré-checagem FP');
+      }
+
+      const fpData: FpResult = await fpResponse.json();
+      setFpResult(fpData);
+
+      const majorityClass = Object.entries(fpData.probabilities).reduce(
+        (best, cur) => (cur[1] > best[1] ? cur : best),
+        ['', -Infinity] as [string, number]
+      )[0];
+
+      if (majorityClass === 'other') {
+        setFpAdvice('A imagem foi classificada majoritariamente como "other". Recomendamos retirar a foto e tentar novamente.');
+      } else {
+        setFpAdvice(null);
+      }
+
+      // Step 3: Run size measurement (includes segmentation + nail detection)
       setLoadingStep('Analisando imagem e detectando unha...');
 
       let sizeMeasurementData: SizeMeasurementResult | null = null;
@@ -768,6 +804,8 @@ export default function PipelineDemoPage() {
     setSizeMeasurement(null);
     setCombinedMaskImageUrl(null);
     setNailWarning(null);
+    setFpResult(null);
+    setFpAdvice(null);
   };
 
   const getTissueColor = (tissueType: string | undefined | null): string => {
@@ -842,6 +880,29 @@ export default function PipelineDemoPage() {
             <div className="bg-amber-50 border-l-4 border-amber-500 p-3 mb-4 rounded">
               <p className="text-sm text-amber-900 font-medium">Aviso</p>
               <p className="text-xs text-amber-800 mt-1">{nailWarning}</p>
+            </div>
+          )}
+
+          {/* FP Pre-check Result */}
+          {fpResult && (
+            <div className="bg-white rounded-lg shadow-md p-4 mb-4">
+              <h2 className="text-base font-semibold text-gray-800 mb-3">
+                Pré-checagem FP
+              </h2>
+              <div className="space-y-2 text-sm text-gray-700">
+                <p>
+                  <span className="font-medium">Classe prevista:</span> {fpResult.predicted_class}
+                </p>
+                <p>
+                  <span className="font-medium">Precisa refazer foto:</span>{' '}
+                  {fpResult.needs_retry_photo ? 'Sim' : 'Não'}
+                </p>
+              </div>
+              {fpAdvice && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3 mt-3 rounded">
+                  <p className="text-xs text-yellow-800">{fpAdvice}</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1172,6 +1233,28 @@ export default function PipelineDemoPage() {
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
               <h3 className="text-amber-900 font-semibold mb-1">Aviso</h3>
               <p className="text-amber-800">{nailWarning}</p>
+            </div>
+          )}
+
+          {fpResult && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                Pré-checagem FP
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+                <p>
+                  <span className="font-semibold">Classe prevista:</span> {fpResult.predicted_class}
+                </p>
+                <p>
+                  <span className="font-semibold">Precisa refazer foto:</span>{' '}
+                  {fpResult.needs_retry_photo ? 'Sim' : 'Não'}
+                </p>
+              </div>
+              {fpAdvice && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-4">
+                  <p className="text-yellow-800 font-medium">{fpAdvice}</p>
+                </div>
+              )}
             </div>
           )}
 
