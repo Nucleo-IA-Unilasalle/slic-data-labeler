@@ -211,6 +211,9 @@ export default function PipelineDemoPage() {
   );
   const [surgwoundWarning, setSurgwoundWarning] = useState<string | null>(null);
   const [maskImageUrl, setMaskImageUrl] = useState<string | null>(null);
+  const [sizeMeasurement, setSizeMeasurement] = useState<SizeMeasurementResult | null>(null);
+  const [combinedMaskImageUrl, setCombinedMaskImageUrl] = useState<string | null>(null);
+  const [nailWarning, setNailWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [apiUrl, setApiUrl] = useState<string | null>(null);
   const segmentationRef = useRef<HTMLDivElement>(null);
@@ -338,6 +341,9 @@ export default function PipelineDemoPage() {
         setSurgwoundInfection(null);
         setSurgwoundWarning(null);
         setMaskImageUrl(null);
+        setSizeMeasurement(null);
+        setCombinedMaskImageUrl(null);
+        setNailWarning(null);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to process image');
@@ -618,6 +624,9 @@ export default function PipelineDemoPage() {
     setMaskImageUrl(null);
     setSelectedFile(null);
     setPreviewUrl(null);
+    setSizeMeasurement(null);
+    setCombinedMaskImageUrl(null);
+    setNailWarning(null);
   };
 
   const getTissueColor = (tissueType: string | undefined | null): string => {
