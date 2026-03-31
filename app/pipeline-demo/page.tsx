@@ -828,6 +828,13 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
+          {nailWarning && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 p-3 mb-4 rounded">
+              <p className="text-sm text-amber-900 font-medium">Aviso</p>
+              <p className="text-xs text-amber-800 mt-1">{nailWarning}</p>
+            </div>
+          )}
+
           {/* Loading State */}
           {!apiUrl && !error && (
             <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3 mb-4 rounded">
@@ -884,7 +891,7 @@ export default function PipelineDemoPage() {
           )}
 
           {/* Segmentation Results */}
-          {segmentation && maskImageUrl && (
+          {(segmentation || sizeMeasurement) && (maskImageUrl || combinedMaskImageUrl) && (
             <div className="bg-white rounded-lg shadow-md p-4 mb-4">
               <h2 className="text-base font-semibold text-gray-800 mb-3">
                 Segmentação da Ferida
@@ -910,12 +917,23 @@ export default function PipelineDemoPage() {
                       className="w-full"
                     />
                     <img
-                      src={maskImageUrl}
+                      src={combinedMaskImageUrl || maskImageUrl || ''}
                       alt="Máscara"
                       className="absolute top-0 left-0 w-full"
                       style={{ mixBlendMode: 'multiply' }}
                     />
                   </div>
+                  {/* Legend */}
+                  {sizeMeasurement?.nail_detected && (
+                    <div className="flex gap-4 mt-2 text-xs text-gray-600">
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded bg-blue-500"></span> Ferida
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-3 h-3 rounded bg-green-500"></span> Unha
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -924,27 +942,57 @@ export default function PipelineDemoPage() {
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="text-xs text-gray-600 mb-1">Área da Ferida</p>
                   <p className="text-xl font-bold text-gray-900">
-                    {segmentation.wound_percentage.toFixed(2)}%
+                    {segmentation?.wound_percentage?.toFixed(2) ?? '0.00'}%
                   </p>
-                  {segmentation.wound_percentage === 0 && (
+                  {(segmentation?.wound_percentage === 0 && !sizeMeasurement?.dfu_detected) && (
                     <p className="text-xs text-yellow-600 mt-1">
                       Nenhuma ferida detectada
                     </p>
                   )}
                 </div>
 
+                {/* Nail Detection Status */}
+                <div className={`rounded-lg p-3 ${sizeMeasurement?.nail_detected ? 'bg-green-50' : 'bg-amber-50'}`}>
+                  <p className="text-xs text-gray-600 mb-1">Detecção de Unha</p>
+                  <p className={`text-base font-bold ${sizeMeasurement?.nail_detected ? 'text-green-700' : 'text-amber-700'}`}>
+                    {sizeMeasurement?.nail_detected ? 'Detectada' : 'Não Detectada'}
+                  </p>
+                </div>
+
+                {/* Size Measurement - Only if nail detected */}
+                {sizeMeasurement?.nail_detected && sizeMeasurement?.dfu_detected && (
+                  <>
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1">Tamanho Estimado da Ferida</p>
+                      <p className="text-xl font-bold text-blue-700">
+                        {sizeMeasurement.dfu_area_cm2.toFixed(2)} cm²
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-600 mb-1">Tamanho da unha considerado</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {sizeMeasurement.nail_dimensions.length_mm.toFixed(1)}mm x {sizeMeasurement.nail_dimensions.width_mm.toFixed(1)}mm
+                      </p>
+                      <p className="text-xs text-amber-700 mt-2">
+                        Estimativa considera que a unha e a ferida estão à mesma distância da câmera
+                      </p>
+                    </div>
+                  </>
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs text-gray-600 mb-1">Pixels</p>
                     <p className="text-base font-bold text-gray-900">
-                      {segmentation.wound_pixels.toLocaleString()}
+                      {segmentation?.wound_pixels?.toLocaleString() ?? '0'}
                     </p>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-xs text-gray-600 mb-1">Tamanho</p>
                     <p className="text-base font-bold text-gray-900">
-                      {segmentation.original_width}x{segmentation.original_height}
+                      {segmentation?.original_width ?? sizeMeasurement?.original_width ?? 0}x{segmentation?.original_height ?? sizeMeasurement?.original_height ?? 0}
                     </p>
                   </div>
                 </div>
