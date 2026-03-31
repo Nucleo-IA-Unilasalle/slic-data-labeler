@@ -486,6 +486,9 @@ export default function PipelineDemoPage() {
     setSegmentation(null);
     setTissueResult(null);
     setMaskImageUrl(null);
+    setSizeMeasurement(null);
+    setCombinedMaskImageUrl(null);
+    setNailWarning(null);
 
     try {
       // Step 1: Convert image to base64
@@ -494,9 +497,6 @@ export default function PipelineDemoPage() {
 
       // Step 2: Run size measurement (includes segmentation + nail detection)
       setLoadingStep('Analisando imagem e detectando unha...');
-      setSizeMeasurement(null);
-      setCombinedMaskImageUrl(null);
-      setNailWarning(null);
 
       let sizeMeasurementData: SizeMeasurementResult | null = null;
       let segmentationData: SegmentationResult | null = null;
