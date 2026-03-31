@@ -29,6 +29,28 @@ interface SurgwoundModalityResult {
   probabilities: Record<string, number>;
 }
 
+interface SizeMeasurementResult {
+  dfu_area_cm2: number;
+  dfu_area_mm2: number;
+  nail_area_mm2: number;
+  px_per_mm: number;
+  nail_detected: boolean;
+  dfu_detected: boolean;
+  calibration_source: 'user_provided' | 'population_average';
+  dfu_dimensions: {
+    length_mm: number;
+    width_mm: number;
+  };
+  nail_dimensions: {
+    length_mm: number;
+    width_mm: number;
+  };
+  nail_mask: number[][];
+  dfu_mask: number[][];
+  original_width: number;
+  original_height: number;
+}
+
 interface FetchOutcome {
   response: Response | null;
   networkError: Error | null;
