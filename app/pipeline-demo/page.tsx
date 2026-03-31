@@ -530,11 +530,15 @@ export default function PipelineDemoPage() {
             );
             
             // Also set segmentation for backward compatibility with tissue classification
+            const woundPixels = sizeMeasurementData.dfu_mask.reduce(
+              (sum, row) => sum + row.filter(v => v > 0).length,
+              0
+            );
             segmentationData = {
               mask: sizeMeasurementData.dfu_mask,
               original_width: sizeMeasurementData.original_width,
               original_height: sizeMeasurementData.original_height,
-              wound_pixels: 0, // Will be calculated from mask if needed
+              wound_pixels: woundPixels,
               total_pixels: sizeMeasurementData.original_width * sizeMeasurementData.original_height,
               wound_percentage: sizeMeasurementData.dfu_detected ? 
                 (sizeMeasurementData.dfu_area_mm2 / (sizeMeasurementData.original_width * sizeMeasurementData.original_height / (sizeMeasurementData.px_per_mm * sizeMeasurementData.px_per_mm))) * 100 : 0,
