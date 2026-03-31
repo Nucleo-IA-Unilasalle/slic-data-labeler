@@ -1158,7 +1158,14 @@ export default function PipelineDemoPage() {
             </div>
           )}
 
-          {segmentation && maskImageUrl && (
+          {nailWarning && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <h3 className="text-amber-900 font-semibold mb-1">Aviso</h3>
+              <p className="text-amber-800">{nailWarning}</p>
+            </div>
+          )}
+
+          {(segmentation || sizeMeasurement) && (maskImageUrl || combinedMaskImageUrl) && (
             <div ref={segmentationRef} className="bg-white rounded-lg shadow-md p-6">
               <div className="flex justify-between items-start mb-4">
                 <h2 className="text-xl font-semibold text-gray-800">
@@ -1193,42 +1200,94 @@ export default function PipelineDemoPage() {
                       className="h-auto w-full"
                     />
                     <img
-                      src={maskImageUrl}
+                      src={combinedMaskImageUrl || maskImageUrl || ''}
                       alt="Máscara"
                       className="absolute top-0 left-0 h-auto w-full"
                       style={{ mixBlendMode: 'multiply' }}
                     />
                   </div>
+                  {/* Legend */}
+                  {sizeMeasurement?.nail_detected && (
+                    <div className="flex gap-4 mt-2 text-sm text-gray-600">
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded bg-blue-500"></span> Ferida
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded bg-green-500"></span> Unha
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Área da Ferida</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {segmentation.wound_percentage.toFixed(2)}%
+                    {segmentation?.wound_percentage?.toFixed(2) ?? '0.00'}%
                   </p>
-                  {segmentation.wound_percentage === 0 && (
+                  {(segmentation?.wound_percentage === 0 && !sizeMeasurement?.dfu_detected) && (
                     <p className="text-xs text-yellow-600 mt-2">
-                      Nenhuma ferida detectada. Pipeline interrompido.
+                      Nenhuma ferida detectada
                     </p>
                   )}
+                </div>
+
+                <div className={`rounded-lg p-4 ${sizeMeasurement?.nail_detected ? 'bg-green-50' : 'bg-amber-50'}`}>
+                  <p className="text-sm text-gray-600 mb-1">Detecção de Unha</p>
+                  <p className={`text-2xl font-bold ${sizeMeasurement?.nail_detected ? 'text-green-700' : 'text-amber-700'}`}>
+                    {sizeMeasurement?.nail_detected ? 'Detectada' : 'Não Detectada'}
+                  </p>
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Pixels da Ferida</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {segmentation.wound_pixels.toLocaleString()}
+                    {segmentation?.wound_pixels?.toLocaleString() ?? '0'}
                   </p>
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Tamanho da Imagem</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {segmentation.original_width}x{segmentation.original_height}
+                    {segmentation?.original_width ?? sizeMeasurement?.original_width ?? 0}x{segmentation?.original_height ?? sizeMeasurement?.original_height ?? 0}
                   </p>
                 </div>
               </div>
+
+              {/* Size Measurement Section - Only if nail detected */}
+              {sizeMeasurement?.nail_detected && sizeMeasurement?.dfu_detected && (
+                <div className="border-t border-gray-200 pt-4 mt-4">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Medição de Tamanho</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                      <p className="text-sm font-medium text-blue-800 mb-1">Tamanho Estimado da Ferida</p>
+                      <p className="text-3xl font-bold text-blue-900">
+                        {sizeMeasurement.dfu_area_cm2.toFixed(2)} cm²
+                      </p>
+                      <p className="text-sm text-blue-700 mt-1">
+                        ({sizeMeasurement.dfu_dimensions.length_mm.toFixed(1)}mm x {sizeMeasurement.dfu_dimensions.width_mm.toFixed(1)}mm)
+                      </p>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm font-medium text-gray-700 mb-1">Tamanho da Unha Considerado</p>
+                      <p className="text-xl font-bold text-gray-900">
+                        {sizeMeasurement.nail_dimensions.length_mm.toFixed(1)}mm x {sizeMeasurement.nail_dimensions.width_mm.toFixed(1)}mm
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Fonte: {sizeMeasurement.calibration_source === 'user_provided' ? 'Fornecido pelo usuário' : 'Média populacional'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">Nota:</span> A estimativa de tamanho considera que a unha e a ferida estão à mesma distância da câmera.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
