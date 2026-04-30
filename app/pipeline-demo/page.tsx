@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Camera, Loader2 } from 'lucide-react';
 
@@ -62,6 +62,24 @@ interface FetchOutcome {
   networkError: Error | null;
 }
 
+interface LaserDecisionInput {
+  tecido: string | null;
+  qtd_exudato: string | null;
+  tipo_exsudato: string | null;
+  sinais_infeccao: boolean;
+  status: string | null;
+}
+
+type LaserDecisionKind = 'bloqueio' | 'recomendacao' | 'orientacao' | 'insuficiente';
+
+interface LaserDecisionResult {
+  kind: LaserDecisionKind;
+  message: string;
+  channels: string[];
+  alert: string | null;
+  input: LaserDecisionInput;
+}
+
 async function fetchWithNetworkGrace(url: string, init: RequestInit): Promise<FetchOutcome> {
   try {
     const response: Response = await fetch(url, init);
@@ -72,6 +90,164 @@ async function fetchWithNetworkGrace(url: string, init: RequestInit): Promise<Fe
     console.error('fetchWithNetworkGrace failed:', url, networkError);
     return { response: null, networkError };
   }
+}
+
+function mapApiTissueToLaserTissue(tissueType: string | null): string | null {
+  if (tissueType === null) {
+    return null;
+  }
+  const normalized: string = tissueType.trim().toLowerCase();
+  if (normalized === 'epitelial') {
+    return 'Epitelial';
+  }
+  if (normalized === 'granulação' || normalized === 'granulacao') {
+    return 'Granulação';
+  }
+  if (normalized === 'esfacelo') {
+    return 'Esfacelo';
+  }
+  if (normalized === 'necrotic') {
+    return 'Necrótico';
+  }
+  return tissueType;
+}
+
+function mapApiExudateAmountToLaserAmount(exudateAmount: string | null): string | null {
+  if (exudateAmount === null) {
+    return null;
+  }
+  const normalized: string = exudateAmount.trim().toLowerCase();
+  if (normalized === 'none') {
+    return 'Ausente';
+  }
+  if (normalized === 'low') {
+    return 'Baixo';
+  }
+  if (normalized === 'medium') {
+    return 'Moderado';
+  }
+  if (normalized === 'high') {
+    return 'Intenso';
+  }
+  return exudateAmount;
+}
+
+function hasInfectionSigns(infectionRiskLabel: string | null): boolean {
+  if (infectionRiskLabel === null) {
+    return false;
+  }
+  return infectionRiskLabel.trim().toLowerCase() === 'alto';
+}
+
+function runLaserDecision(input: LaserDecisionInput): LaserDecisionResult {
+  const { tecido, qtd_exudato, tipo_exsudato, sinais_infeccao, status } = input;
+
+  if (tecido === 'Necrose não desbridada' || tecido === 'Necrótico') {
+    return {
+      kind: 'bloqueio',
+      message: '❌ BLOQUEIO: Bloqueia dose local; não automatizar. Solicitar avaliação/desbridamento.',
+      channels: [],
+      alert: null,
+      input,
+    };
+  }
+
+  if (sinais_infeccao) {
+    return {
+      kind: 'bloqueio',
+      message: '❌ BLOQUEIO: Sinais de Infecção detectados. Encaminhar para avaliação especializada.',
+      channels: [],
+      alert: null,
+      input,
+    };
+  }
+
+  if (tecido === 'Fora do escopo') {
+    return {
+      kind: 'bloqueio',
+      message: '❌ BLOQUEIO: Caso fora do escopo. Exibir necessidade de avaliação especializada.',
+      channels: [],
+      alert: null,
+      input,
+    };
+  }
+
+  if (
+    tecido === 'Fechada / Cicatrizada' ||
+    status === 'Cicatrizada' ||
+    qtd_exudato === 'Ausente' ||
+    tipo_exsudato === 'Inexistente'
+  ) {
+    return {
+      kind: 'recomendacao',
+      message: '✅ RECOMENDAÇÃO: INFRA (Protocolo de manutenção; uso adjuvante).',
+      channels: ['INFRA'],
+      alert: null,
+      input,
+    };
+  }
+
+  const suggestedChannels: Set<string> = new Set<string>();
+  if (
+    tecido === 'Epitelial' ||
+    tecido === 'Granulação' ||
+    tecido === 'Esfacelo' ||
+    tecido === 'Necrose desbridada'
+  ) {
+    suggestedChannels.add('VERMELHO');
+  }
+  if (tecido === 'Granulação' || tecido === 'Esfacelo') {
+    suggestedChannels.add('INFRA');
+  }
+
+  let alert: string | null = null;
+  if (tecido === 'Esfacelo') {
+    alert = ' [OBS: Apenas após limpeza adequada; não usar isoladamente]';
+  } else if (qtd_exudato === 'Moderado') {
+    alert = ' [OBS: Reforçar reavaliação; evitar escalonamento automático]';
+  }
+
+  if (suggestedChannels.size === 0) {
+    if (tecido === 'Necrose desbridada') {
+      return {
+        kind: 'orientacao',
+        message: '⚠️ ORIENTAÇÃO: Reclassificar após desbridamento para definir leito predominante.',
+        channels: [],
+        alert: null,
+        input,
+      };
+    }
+    return {
+      kind: 'insuficiente',
+      message: '⚠️ Dados insuficientes para recomendação automática.',
+      channels: [],
+      alert: null,
+      input,
+    };
+  }
+
+  const channels: string[] = Array.from(suggestedChannels).sort();
+  const channelsText: string = channels.join(' + ');
+  return {
+    kind: 'recomendacao',
+    message: `Canais: ${channelsText}${alert ?? ''}`,
+    channels,
+    alert,
+    input,
+  };
+}
+
+function getLaserDecisionContainerClass(kind: LaserDecisionKind): string {
+  if (kind === 'bloqueio') {
+    return 'border-red-200 bg-red-50';
+  }
+  if (kind === 'recomendacao') {
+    return 'border-green-200 bg-green-50';
+  }
+  if (kind === 'orientacao') {
+    return 'border-amber-200 bg-amber-50';
+  }
+  return 'border-gray-200 bg-gray-50';
 }
 
 function parseSurgwoundModalityPayload(payload: unknown): SurgwoundModalityResult {
@@ -226,6 +402,24 @@ export default function PipelineDemoPage() {
   const [apiUrl, setApiUrl] = useState<string | null>(null);
   const segmentationRef = useRef<HTMLDivElement>(null);
   const tissueResultRef = useRef<HTMLDivElement>(null);
+  const laserDecision: LaserDecisionResult | null = useMemo(() => {
+    if (
+      tissueResult === null &&
+      surgwoundExudate === null &&
+      surgwoundHealing === null &&
+      surgwoundInfection === null
+    ) {
+      return null;
+    }
+    const input: LaserDecisionInput = {
+      tecido: mapApiTissueToLaserTissue(tissueResult?.xgboost_tissue_type ?? null),
+      qtd_exudato: mapApiExudateAmountToLaserAmount(tissueResult?.xgboost_slough_amount ?? null),
+      tipo_exsudato: surgwoundExudate?.predicted_label ?? null,
+      sinais_infeccao: hasInfectionSigns(surgwoundInfection?.predicted_label ?? null),
+      status: surgwoundHealing?.predicted_label ?? null,
+    };
+    return runLaserDecision(input);
+  }, [tissueResult, surgwoundExudate, surgwoundHealing, surgwoundInfection]);
 
   useEffect(() => {
     fetchActiveApiUrl();
@@ -1121,6 +1315,36 @@ export default function PipelineDemoPage() {
               <SurgwoundModalityPanel result={surgwoundInfection} compact={true} />
             </div>
           )}
+
+          {laserDecision !== null && (
+            <div className="bg-white rounded-lg shadow-md p-4 mb-4 space-y-3">
+              <h2 className="text-base font-semibold text-gray-800">Análise de Modulação Laser</h2>
+              <div className={`rounded-lg border p-3 ${getLaserDecisionContainerClass(laserDecision.kind)}`}>
+                <p className="text-sm font-medium text-gray-900">{laserDecision.message}</p>
+                <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-gray-700">
+                  <p>
+                    <span className="font-medium">Tecido:</span>{' '}
+                    {laserDecision.input.tecido ?? 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-medium">Qtd. exsudato:</span>{' '}
+                    {laserDecision.input.qtd_exudato ?? 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-medium">Tipo de exsudato:</span>{' '}
+                    {laserDecision.input.tipo_exsudato ?? 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-medium">Status:</span> {laserDecision.input.status ?? 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-medium">Sinais de infecção:</span>{' '}
+                    {laserDecision.input.sinais_infeccao ? 'Sim' : 'Não'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bottom Camera Button - Fixed */}
@@ -1436,6 +1660,35 @@ export default function PipelineDemoPage() {
                 <SurgwoundModalityPanel result={surgwoundExudate} compact={false} />
                 <SurgwoundModalityPanel result={surgwoundHealing} compact={false} />
                 <SurgwoundModalityPanel result={surgwoundInfection} compact={false} />
+              </div>
+            </div>
+          )}
+
+          {laserDecision !== null && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-4">
+              <h2 className="text-xl font-semibold text-gray-800">Análise de Modulação Laser</h2>
+              <div className={`rounded-lg border p-4 ${getLaserDecisionContainerClass(laserDecision.kind)}`}>
+                <p className="text-base font-semibold text-gray-900">{laserDecision.message}</p>
+                <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-gray-700 md:grid-cols-2">
+                  <p>
+                    <span className="font-semibold">Tecido:</span> {laserDecision.input.tecido ?? 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Qtd. exsudato:</span>{' '}
+                    {laserDecision.input.qtd_exudato ?? 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Tipo de exsudato:</span>{' '}
+                    {laserDecision.input.tipo_exsudato ?? 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Status:</span> {laserDecision.input.status ?? 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Sinais de infecção:</span>{' '}
+                    {laserDecision.input.sinais_infeccao ? 'Sim' : 'Não'}
+                  </p>
+                </div>
               </div>
             </div>
           )}
