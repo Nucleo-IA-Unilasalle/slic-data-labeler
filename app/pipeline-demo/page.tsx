@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Camera, Loader2 } from 'lucide-react';
+import { Camera, FileDown, LayoutGrid, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+
+import {
+  downloadPipelineReport,
+  type PipelineAuditClientRow,
+  type PipelineInferenceCallDbRow,
+  type PipelineReportInput,
+} from './pipelinePdf';
 
 interface SegmentationResult {
   mask: number[][];
@@ -29,26 +37,161 @@ interface SurgwoundModalityResult {
   probabilities: Record<string, number>;
 }
 
+type SizeCalibrationMethod = 'aruco' | 'nail';
+
+/** OpenCV predefined dictionary cv2.aruco.DICT_4X4_50 (must match printed markers). */
+const ARUCO_DICT_4X4_50 = 0;
+
 interface SizeMeasurementResult {
+  error?: string;
   dfu_area_cm2: number;
   dfu_area_mm2: number;
-  nail_area_mm2: number;
+  nail_area_mm2?: number;
   px_per_mm: number;
   nail_detected: boolean;
+  aruco_detected?: boolean;
   dfu_detected: boolean;
-  calibration_source: 'user_provided' | 'population_average';
+  calibration_source: string;
   dfu_dimensions: {
     length_mm: number;
     width_mm: number;
   };
-  nail_dimensions: {
+  nail_dimensions?: {
     length_mm: number;
     width_mm: number;
   };
-  nail_mask: number[][];
+  printed_marker_square_side_mm?: number;
+  nail_mask?: number[][] | null;
+  aruco_quad_mask?: number[][] | null;
   dfu_mask: number[][];
   original_width: number;
   original_height: number;
+  aruco_calibration_marker_ids?: number[];
+  px_per_mm_by_marker_id?: Record<string, number>;
+}
+
+function pickReferenceMaskForOverlay(sm: SizeMeasurementResult): number[][] | null {
+  const aruco = sm.aruco_quad_mask;
+  if (aruco !== null && aruco !== undefined && Array.isArray(aruco) && aruco.length > 0) {
+    return aruco;
+  }
+  const nail = sm.nail_mask;
+  if (nail !== null && nail !== undefined && Array.isArray(nail) && nail.length > 0) {
+    return nail;
+  }
+  return null;
+}
+
+function showRealWorldSizing(
+  sm: SizeMeasurementResult | null,
+  method: SizeCalibrationMethod
+): boolean {
+  if (sm === null || !sm.dfu_detected) {
+    return false;
+  }
+  if (method === 'aruco') {
+    return sm.aruco_detected === true;
+  }
+  return sm.nail_detected === true;
+}
+
+function SizeCalibrationRadios(props: {
+  value: SizeCalibrationMethod;
+  onChange: (method: SizeCalibrationMethod) => void;
+  disabled: boolean;
+  layout: 'mobile' | 'desktop';
+}) {
+  const { value, onChange, disabled, layout } = props;
+  const isDesktop = layout === 'desktop';
+  const legendClass: string = isDesktop
+    ? 'text-sm font-medium text-gray-800 mb-2'
+    : 'text-xs font-medium text-gray-800 mb-2';
+  const optionClass: string = isDesktop ? 'text-sm text-gray-800' : 'text-xs text-gray-800';
+
+  const name: string =
+    layout === 'desktop'
+      ? 'pipeline-size-calibration-desktop'
+      : 'pipeline-size-calibration-mobile';
+
+  const rowCls: string = 'flex items-start gap-2 cursor-pointer';
+
+  return (
+    <fieldset disabled={disabled} className={isDesktop ? '' : '-mx-0.5'}>
+      <legend className={legendClass}>Medição da ferida (escala física)</legend>
+      <div className="space-y-2">
+        <label className={rowCls}>
+          <input
+            type="radio"
+            name={name}
+            checked={value === 'aruco'}
+            onChange={() => {
+              onChange('aruco');
+            }}
+            className="mt-0.5 h-4 w-4 shrink-0 border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className={optionClass}>
+            ArUco — marcadores 0 e 1 na mesma tira (padrão)
+          </span>
+        </label>
+        <label className={rowCls}>
+          <input
+            type="radio"
+            name={name}
+            checked={value === 'nail'}
+            onChange={() => {
+              onChange('nail');
+            }}
+            className="mt-0.5 h-4 w-4 shrink-0 border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className={optionClass}>Unha — segmentação da unha como referência</span>
+        </label>
+      </div>
+    </fieldset>
+  );
+}
+
+function ArucoMarkerSideCmField(props: {
+  valueCm: string;
+  onChangeValueCm: (valueCm: string) => void;
+  disabled: boolean;
+  layout: 'mobile' | 'desktop';
+}) {
+  const { valueCm, onChangeValueCm, disabled, layout } = props;
+  const isDesktop = layout === 'desktop';
+  const labelClass: string = isDesktop
+    ? 'mb-1 block text-sm font-medium text-gray-700'
+    : 'mb-1 block text-xs font-medium text-gray-700';
+  const inputClass: string = isDesktop
+    ? 'mt-0 block w-full max-w-[12rem] rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100'
+    : 'mt-0 block w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100';
+  const hintClass: string = isDesktop ? 'mt-1 text-xs text-gray-500' : 'mt-1 text-[11px] text-gray-500';
+
+  const inputId: string =
+    layout === 'desktop' ? 'aruco-marker-cm-desktop' : 'aruco-marker-cm-mobile';
+
+  return (
+    <div className={isDesktop ? 'mt-3' : 'mt-3 pl-0.5'}>
+      <label htmlFor={inputId} className={labelClass}>
+        Lado do quadrado do marcador (cm)
+      </label>
+      <input
+        id={inputId}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        value={valueCm}
+        disabled={disabled}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+          onChangeValueCm(e.target.value);
+        }}
+        className={inputClass}
+        aria-describedby={`${inputId}-hint`}
+      />
+      <p id={`${inputId}-hint`} className={hintClass}>
+        Tamanho físico impresso da borda preta do ArUco; padrão 1 cm (= 10 mm por marcador).
+      </p>
+    </div>
+  );
 }
 
 interface FpResult {
@@ -78,6 +221,34 @@ interface LaserDecisionResult {
   channels: string[];
   alert: string | null;
   input: LaserDecisionInput;
+}
+
+interface AuditPayload {
+  image_id: string | null;
+  inference_call_id: string | null;
+  observation_id: string | null;
+}
+
+function splitJsonWithAudit(raw: unknown): { rest: unknown; audit: AuditPayload | null } {
+  if (typeof raw !== 'object' || raw === null) {
+    return { rest: raw, audit: null };
+  }
+  const o = raw as Record<string, unknown>;
+  const auditRaw = o['_audit'];
+  const { _audit: _ignored, ...rest } = o;
+  if (typeof auditRaw !== 'object' || auditRaw === null) {
+    return { rest, audit: null };
+  }
+  const a = auditRaw as Record<string, unknown>;
+  return {
+    rest,
+    audit: {
+      image_id: typeof a.image_id === 'string' ? a.image_id : null,
+      inference_call_id:
+        typeof a.inference_call_id === 'string' ? a.inference_call_id : null,
+      observation_id: typeof a.observation_id === 'string' ? a.observation_id : null,
+    },
+  };
 }
 
 async function fetchWithNetworkGrace(url: string, init: RequestInit): Promise<FetchOutcome> {
@@ -290,7 +461,11 @@ type SurgwoundParseResult =
   | { status: 'ok'; data: SurgwoundModalityResult }
   | { status: 'err'; message: string };
 
-async function tryParseSurgwoundModality(outcome: FetchOutcome): Promise<SurgwoundParseResult> {
+async function tryParseSurgwoundModality(
+  outcome: FetchOutcome,
+  endpointPath: string,
+  recordAudit: (endpoint: string, payload: unknown) => void
+): Promise<SurgwoundParseResult> {
   if (outcome.networkError !== null) {
     return { status: 'err', message: outcome.networkError.message };
   }
@@ -323,7 +498,9 @@ async function tryParseSurgwoundModality(outcome: FetchOutcome): Promise<Surgwou
   }
   try {
     const data: unknown = JSON.parse(bodyText);
-    const parsed: SurgwoundModalityResult = parseSurgwoundModalityPayload(data);
+    recordAudit(endpointPath, data);
+    const { rest } = splitJsonWithAudit(data);
+    const parsed: SurgwoundModalityResult = parseSurgwoundModalityPayload(rest);
     return { status: 'ok', data: parsed };
   } catch (parseErr: unknown) {
     const msg: string =
@@ -373,6 +550,147 @@ function SurgwoundModalityPanel(props: {
   );
 }
 
+interface ObservationSectionProps {
+  observationText: string;
+  onObservationChange: (value: string) => void;
+  onSave: () => void | Promise<void>;
+  isSaving: boolean;
+  feedback: string | null;
+  layout: 'mobile' | 'desktop';
+}
+
+function ObservationSection(props: ObservationSectionProps) {
+  const {
+    observationText,
+    onObservationChange,
+    onSave,
+    isSaving,
+    feedback,
+    layout,
+  } = props;
+  const isDesktop: boolean = layout === 'desktop';
+  const containerClass: string = isDesktop
+    ? 'bg-white rounded-lg shadow-md p-6 mb-6'
+    : 'bg-white rounded-lg shadow-md p-4 mb-4';
+  const titleClass: string = isDesktop
+    ? 'text-xl font-semibold text-gray-800 mb-2'
+    : 'text-base font-semibold text-gray-800 mb-2';
+  const hintClass: string = isDesktop ? 'text-sm text-gray-500 mb-3' : 'text-xs text-gray-500 mb-3';
+
+  return (
+    <div className={containerClass}>
+      <h2 className={titleClass}>Observações clínicas</h2>
+      <p className={hintClass}>
+        Disponível após concluir a análise completa. O texto é associado à mesma imagem usada neste pipeline.
+      </p>
+      <label
+        htmlFor={isDesktop ? 'observation-desktop' : 'observation-mobile'}
+        className={`block font-medium text-gray-700 mb-2 ${isDesktop ? 'text-sm' : 'text-xs'}`}
+      >
+        Observação
+      </label>
+      <textarea
+        id={isDesktop ? 'observation-desktop' : 'observation-mobile'}
+        value={observationText}
+        onChange={(e) => onObservationChange(e.target.value)}
+        rows={isDesktop ? 4 : 3}
+        placeholder="Notas clínicas ou contexto adicional…"
+        disabled={isSaving}
+        className={
+          isDesktop
+            ? 'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100'
+            : 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100'
+        }
+      />
+      <button
+        type="button"
+        onClick={() => {
+          void onSave();
+        }}
+        disabled={isSaving || observationText.trim() === ''}
+        className={
+          isDesktop
+            ? 'mt-3 inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-400'
+            : 'mt-3 flex w-full items-center justify-center rounded-lg bg-emerald-600 py-3 text-sm font-medium text-white active:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-400'
+        }
+      >
+        {isSaving ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+            Salvando…
+          </>
+        ) : (
+          'Salvar observação'
+        )}
+      </button>
+      {feedback !== null && feedback !== '' && (
+        <p
+          className={
+            feedback.startsWith('Erro')
+              ? `mt-2 ${isDesktop ? 'text-sm text-red-700' : 'text-xs text-red-700'}`
+              : `mt-2 ${isDesktop ? 'text-sm text-green-700' : 'text-xs text-green-700'}`
+          }
+        >
+          {feedback}
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface PdfExportSectionProps {
+  layout: 'mobile' | 'desktop';
+  isExporting: boolean;
+  onExport: () => void;
+}
+
+function PdfExportSection(props: PdfExportSectionProps) {
+  const { layout, isExporting, onExport } = props;
+  const isDesktop: boolean = layout === 'desktop';
+  const containerClass: string = isDesktop
+    ? 'bg-white rounded-lg shadow-md p-6 mb-6'
+    : 'bg-white rounded-lg shadow-md p-4 mb-4';
+  const titleClass: string = isDesktop
+    ? 'text-xl font-semibold text-gray-800 mb-2'
+    : 'text-base font-semibold text-gray-800 mb-2';
+  const hintClass: string = isDesktop ? 'text-sm text-gray-500 mb-3' : 'text-xs text-gray-500 mb-3';
+
+  return (
+    <div className={containerClass}>
+      <h2 className={titleClass}>Exportar relatório</h2>
+      <p className={hintClass}>
+        Gera um PDF com a imagem analisada (se disponível), sobreposição da segmentação (ferida e
+        referência quando houver), FP, dimensões, tecido,
+        Deepskin, SurgWound, laser e o texto de observação atual.
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          void onExport();
+        }}
+        disabled={isExporting}
+        className={
+          isDesktop
+            ? 'inline-flex items-center justify-center rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-gray-400'
+            : 'flex w-full items-center justify-center rounded-lg bg-slate-700 py-3 text-sm font-medium text-white active:bg-slate-800 disabled:cursor-not-allowed disabled:bg-gray-400'
+        }
+      >
+        {isExporting ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+            Gerando PDF…
+          </>
+        ) : (
+          <>
+            <FileDown className="mr-2 h-4 w-4" aria-hidden />
+            Exportar PDF
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -396,10 +714,20 @@ export default function PipelineDemoPage() {
   const [sizeMeasurement, setSizeMeasurement] = useState<SizeMeasurementResult | null>(null);
   const [combinedMaskImageUrl, setCombinedMaskImageUrl] = useState<string | null>(null);
   const [nailWarning, setNailWarning] = useState<string | null>(null);
+  const [sizeCalibrationMethod, setSizeCalibrationMethod] =
+    useState<SizeCalibrationMethod>('aruco');
+  const [arucoMarkerSideCm, setArucoMarkerSideCm] = useState<string>('1');
   const [fpResult, setFpResult] = useState<FpResult | null>(null);
   const [fpAdvice, setFpAdvice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [apiUrl, setApiUrl] = useState<string | null>(null);
+  const [observationText, setObservationText] = useState<string>('');
+  const [pipelineRunComplete, setPipelineRunComplete] = useState<boolean>(false);
+  const [isSavingObservation, setIsSavingObservation] = useState<boolean>(false);
+  const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
+  const [observationFeedback, setObservationFeedback] = useState<string | null>(null);
+  const lastPipelineBase64Ref = useRef<string | null>(null);
+  const pipelineAuditTrailRef = useRef<PipelineAuditClientRow[]>([]);
   const segmentationRef = useRef<HTMLDivElement>(null);
   const tissueResultRef = useRef<HTMLDivElement>(null);
   const laserDecision: LaserDecisionResult | null = useMemo(() => {
@@ -547,6 +875,11 @@ export default function PipelineDemoPage() {
         setCombinedMaskImageUrl(null);
         setNailWarning(null);
         setError(null);
+        setObservationText('');
+        setPipelineRunComplete(false);
+        setObservationFeedback(null);
+        lastPipelineBase64Ref.current = null;
+        pipelineAuditTrailRef.current = [];
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to process image');
       }
@@ -579,7 +912,7 @@ export default function PipelineDemoPage() {
     if (sizeMeasurement && sizeMeasurement.dfu_mask) {
       createCombinedMaskImage(
         sizeMeasurement.dfu_mask,
-        sizeMeasurement.nail_mask,
+        pickReferenceMaskForOverlay(sizeMeasurement),
         sizeMeasurement.original_width,
         sizeMeasurement.original_height
       );
@@ -686,6 +1019,11 @@ export default function PipelineDemoPage() {
 
     setIsLoading(true);
     setError(null);
+    setPipelineRunComplete(false);
+    setObservationFeedback(null);
+    lastPipelineBase64Ref.current = null;
+    pipelineAuditTrailRef.current = [];
+    setObservationText('');
     setDeepskinWarning(null);
     setSurgwoundExudate(null);
     setSurgwoundHealing(null);
@@ -705,6 +1043,26 @@ export default function PipelineDemoPage() {
       setLoadingStep('Convertendo imagem...');
       const base64Image = await fileToBase64(selectedFile);
 
+      const recordAudit = (endpoint: string, raw: unknown): void => {
+        const { audit } = splitJsonWithAudit(raw);
+        if (audit === null) {
+          return;
+        }
+        if (
+          audit.image_id === null &&
+          audit.inference_call_id === null &&
+          audit.observation_id === null
+        ) {
+          return;
+        }
+        pipelineAuditTrailRef.current.push({
+          endpoint,
+          imageId: audit.image_id,
+          inferenceCallId: audit.inference_call_id,
+          observationId: audit.observation_id,
+        });
+      };
+
       // Step 2: Run FP pre-check
       setLoadingStep('Executando pré-checagem FP...');
       const fpResponse = await fetch(`${apiUrl}/fp`, {
@@ -717,7 +1075,10 @@ export default function PipelineDemoPage() {
         throw new Error('Falha ao executar pré-checagem FP');
       }
 
-      const fpData: FpResult = await fpResponse.json();
+      const fpRaw: unknown = await fpResponse.json();
+      recordAudit('/fp', fpRaw);
+      const { rest: fpRest } = splitJsonWithAudit(fpRaw);
+      const fpData: FpResult = fpRest as FpResult;
       setFpResult(fpData);
 
       const majorityClass = Object.entries(fpData.probabilities).reduce(
@@ -731,79 +1092,32 @@ export default function PipelineDemoPage() {
         setFpAdvice(null);
       }
 
-      // Step 3: Run size measurement (includes segmentation + nail detection)
-      setLoadingStep('Analisando imagem e detectando unha...');
+      let arucoMarkerSideLengthMm: number | null = null;
+      if (sizeCalibrationMethod === 'aruco') {
+        const sideCmNormalized: string = arucoMarkerSideCm.trim().replace(',', '.');
+        const sideCmParsed: number = Number.parseFloat(sideCmNormalized);
+        if (!Number.isFinite(sideCmParsed) || sideCmParsed <= 0) {
+          throw new Error(
+            'Informe um tamanho do marcador ArUco em centímetros válido (número maior que zero).'
+          );
+        }
+        arucoMarkerSideLengthMm = sideCmParsed * 10;
+      }
+
+      // Step 3: Run size measurement (ArUco strip or nail-based scale)
+      setLoadingStep(
+        sizeCalibrationMethod === 'aruco'
+          ? 'Analisando imagem e marcadores ArUco...'
+          : 'Analisando imagem e detectando unha...'
+      );
 
       let sizeMeasurementData: SizeMeasurementResult | null = null;
       let segmentationData: SegmentationResult | null = null;
 
-      try {
-        const sizeMeasurementResponse = await fetch(`${apiUrl}/size-measurement`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ image: base64Image, include_masks: true }),
-        });
-
-        if (sizeMeasurementResponse.ok) {
-          sizeMeasurementData = await sizeMeasurementResponse.json();
-          setSizeMeasurement(sizeMeasurementData);
-          
-          if (sizeMeasurementData && sizeMeasurementData.dfu_mask) {
-            // Create combined mask with both wound and nail
-            createCombinedMaskImage(
-              sizeMeasurementData.dfu_mask,
-              sizeMeasurementData.nail_mask,
-              sizeMeasurementData.original_width,
-              sizeMeasurementData.original_height
-            );
-            
-            // Also set segmentation for backward compatibility with tissue classification
-            const woundPixels = sizeMeasurementData.dfu_mask.reduce(
-              (sum, row) => sum + row.filter(v => v > 0).length,
-              0
-            );
-            segmentationData = {
-              mask: sizeMeasurementData.dfu_mask,
-              original_width: sizeMeasurementData.original_width,
-              original_height: sizeMeasurementData.original_height,
-              wound_pixels: woundPixels,
-              total_pixels: sizeMeasurementData.original_width * sizeMeasurementData.original_height,
-              wound_percentage: sizeMeasurementData.dfu_detected ? 
-                (sizeMeasurementData.dfu_area_mm2 / (sizeMeasurementData.original_width * sizeMeasurementData.original_height / (sizeMeasurementData.px_per_mm * sizeMeasurementData.px_per_mm))) * 100 : 0,
-            };
-            setSegmentation(segmentationData);
-          }
-        } else {
-          // Size measurement failed (likely no nail detected), fallback to segmentation
-          const errorData = await sizeMeasurementResponse.json().catch(() => ({}));
-          console.log('Size measurement response:', errorData);
-          
-          setNailWarning('Unha não detectada na imagem. Não foi possível calcular o tamanho real da ferida.');
-          
-          // Fallback to regular segmentation
-          setLoadingStep('Executando segmentação da ferida...');
-          const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ image: base64Image }),
-          });
-
-          if (!segmentationResponse.ok) {
-            throw new Error('Falha ao executar segmentação');
-          }
-
-          segmentationData = await segmentationResponse.json();
-          setSegmentation(segmentationData);
-        }
-      } catch (sizeMeasurementError) {
-        console.error('Size measurement error:', sizeMeasurementError);
-        setNailWarning('Unha não detectada na imagem. Não foi possível calcular o tamanho real da ferida.');
-        
-        // Fallback to regular segmentation
+      const measurementFailureThenSegmentOnly = async (
+        warningMsg: string
+      ): Promise<void> => {
+        setNailWarning(warningMsg);
         setLoadingStep('Executando segmentação da ferida...');
         const segmentationResponse = await fetch(`${apiUrl}/segmentation`, {
           method: 'POST',
@@ -817,8 +1131,158 @@ export default function PipelineDemoPage() {
           throw new Error('Falha ao executar segmentação');
         }
 
-        segmentationData = await segmentationResponse.json();
+        const segRawFall: unknown = await segmentationResponse.json();
+        recordAudit('/segmentation', segRawFall);
+        const { rest: segRestFall } = splitJsonWithAudit(segRawFall);
+        segmentationData = segRestFall as SegmentationResult;
         setSegmentation(segmentationData);
+      };
+
+      try {
+        if (sizeCalibrationMethod === 'aruco') {
+          if (arucoMarkerSideLengthMm === null) {
+            throw new Error('Calibração ArUco: tamanho do marcador inválido.');
+          }
+          const sizeMeasurementResponse = await fetch(`${apiUrl}/size-measurement-aruco`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              image: base64Image,
+              include_masks: true,
+              aruco_dictionary_id: ARUCO_DICT_4X4_50,
+              marker_side_length_mm: arucoMarkerSideLengthMm,
+            }),
+          });
+
+          const smRaw: unknown = await sizeMeasurementResponse.json();
+          const arucoEndpoint: string = '/size-measurement-aruco';
+
+          if (typeof smRaw === 'object' && smRaw !== null) {
+            recordAudit(arucoEndpoint, smRaw);
+          }
+
+          const { rest: smRest } = splitJsonWithAudit(smRaw);
+          const hasError =
+            typeof smRest === 'object' &&
+            smRest !== null &&
+            'error' in smRest &&
+            typeof (smRest as { error?: string }).error === 'string';
+
+          if (sizeMeasurementResponse.ok && !hasError) {
+            sizeMeasurementData = smRest as SizeMeasurementResult;
+            setSizeMeasurement(sizeMeasurementData);
+
+            if (sizeMeasurementData && sizeMeasurementData.dfu_mask) {
+              createCombinedMaskImage(
+                sizeMeasurementData.dfu_mask,
+                pickReferenceMaskForOverlay(sizeMeasurementData),
+                sizeMeasurementData.original_width,
+                sizeMeasurementData.original_height
+              );
+
+              const woundPixels = sizeMeasurementData.dfu_mask.reduce(
+                (sum, row) => sum + row.filter((v: number) => v > 0).length,
+                0
+              );
+              segmentationData = {
+                mask: sizeMeasurementData.dfu_mask,
+                original_width: sizeMeasurementData.original_width,
+                original_height: sizeMeasurementData.original_height,
+                wound_pixels: woundPixels,
+                total_pixels:
+                  sizeMeasurementData.original_width *
+                  sizeMeasurementData.original_height,
+                wound_percentage: sizeMeasurementData.dfu_detected
+                  ? (sizeMeasurementData.dfu_area_mm2 /
+                      ((sizeMeasurementData.original_width *
+                        sizeMeasurementData.original_height) /
+                        (sizeMeasurementData.px_per_mm *
+                          sizeMeasurementData.px_per_mm))) *
+                    100
+                  : 0,
+              };
+              setSegmentation(segmentationData);
+            }
+          } else {
+            let detail: string =
+              'Marcadores ArUco 0 e 1 não foram detectados com sucesso.';
+            if (hasError) {
+              detail = String((smRest as { error: string }).error);
+            }
+            await measurementFailureThenSegmentOnly(
+              `Calibração ArUco: ${detail}`
+            );
+          }
+        } else {
+          const sizeMeasurementResponse = await fetch(`${apiUrl}/size-measurement`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ image: base64Image, include_masks: true }),
+          });
+
+          if (sizeMeasurementResponse.ok) {
+            const smRaw: unknown = await sizeMeasurementResponse.json();
+            recordAudit('/size-measurement', smRaw);
+            const { rest: smRest } = splitJsonWithAudit(smRaw);
+            sizeMeasurementData = smRest as SizeMeasurementResult;
+            setSizeMeasurement(sizeMeasurementData);
+
+            if (sizeMeasurementData && sizeMeasurementData.dfu_mask) {
+              createCombinedMaskImage(
+                sizeMeasurementData.dfu_mask,
+                pickReferenceMaskForOverlay(sizeMeasurementData),
+                sizeMeasurementData.original_width,
+                sizeMeasurementData.original_height
+              );
+
+              const woundPixels = sizeMeasurementData.dfu_mask.reduce(
+                (sum, row) => sum + row.filter((v: number) => v > 0).length,
+                0
+              );
+              segmentationData = {
+                mask: sizeMeasurementData.dfu_mask,
+                original_width: sizeMeasurementData.original_width,
+                original_height: sizeMeasurementData.original_height,
+                wound_pixels: woundPixels,
+                total_pixels:
+                  sizeMeasurementData.original_width *
+                  sizeMeasurementData.original_height,
+                wound_percentage: sizeMeasurementData.dfu_detected
+                  ? (sizeMeasurementData.dfu_area_mm2 /
+                      ((sizeMeasurementData.original_width *
+                        sizeMeasurementData.original_height) /
+                        (sizeMeasurementData.px_per_mm *
+                          sizeMeasurementData.px_per_mm))) *
+                    100
+                  : 0,
+              };
+              setSegmentation(segmentationData);
+            }
+          } else {
+            const errorData: unknown = await sizeMeasurementResponse
+              .json()
+              .catch(() => ({}));
+            if (typeof errorData === 'object' && errorData !== null) {
+              recordAudit('/size-measurement', errorData);
+            }
+            console.log('Size measurement response:', errorData);
+
+            await measurementFailureThenSegmentOnly(
+              'Unha não detectada na imagem. Não foi possível calcular o tamanho real da ferida.'
+            );
+          }
+        }
+      } catch (sizeMeasurementError) {
+        console.error('Size measurement error:', sizeMeasurementError);
+        const fallbackMsg: string =
+          sizeCalibrationMethod === 'aruco'
+            ? 'Falha na calibração ArUco; executando apenas segmentação da ferida.'
+            : 'Unha não detectada na imagem. Não foi possível calcular o tamanho real da ferida.';
+        await measurementFailureThenSegmentOnly(fallbackMsg);
       }
 
       const ingestSurgwoundTriplet = async (
@@ -831,9 +1295,9 @@ export default function PipelineDemoPage() {
           SurgwoundParseResult,
           SurgwoundParseResult,
         ] = await Promise.all([
-          tryParseSurgwoundModality(exOutcome),
-          tryParseSurgwoundModality(healOutcome),
-          tryParseSurgwoundModality(infOutcome),
+          tryParseSurgwoundModality(exOutcome, '/surgwound/exudate-type', recordAudit),
+          tryParseSurgwoundModality(healOutcome, '/surgwound/healing-status', recordAudit),
+          tryParseSurgwoundModality(infOutcome, '/surgwound/infection-risk-assessment', recordAudit),
         ]);
 
         setSurgwoundExudate(exR.status === 'ok' ? exR.data : null);
@@ -914,8 +1378,10 @@ export default function PipelineDemoPage() {
           throw new Error('Falha ao executar classificação de tecido');
         }
 
-        const tissueData: TissueResult = await tissueResponse.json();
-        setTissueResult(tissueData);
+        const tissueRaw: unknown = await tissueResponse.json();
+        recordAudit('/tissue', tissueRaw);
+        const { rest: tissueRest } = splitJsonWithAudit(tissueRaw);
+        setTissueResult(tissueRest as TissueResult);
 
         if (deepskinOutcome.networkError !== null) {
           setDeepskinResult(null);
@@ -934,16 +1400,18 @@ export default function PipelineDemoPage() {
             );
           } else {
             try {
-              const deepskinData: unknown = await deepskinResponse.json();
+              const deepskinRaw: unknown = await deepskinResponse.json();
+              recordAudit('/deepskin', deepskinRaw);
+              const { rest: dsRest } = splitJsonWithAudit(deepskinRaw);
               if (
-                typeof deepskinData !== 'object' ||
-                deepskinData === null ||
-                !('pwat_score' in deepskinData) ||
-                typeof (deepskinData as DeepskinResult).pwat_score !== 'number'
+                typeof dsRest !== 'object' ||
+                dsRest === null ||
+                !('pwat_score' in dsRest) ||
+                typeof (dsRest as DeepskinResult).pwat_score !== 'number'
               ) {
                 throw new TypeError('Resposta Deepskin com formato inválido');
               }
-              setDeepskinResult(deepskinData as DeepskinResult);
+              setDeepskinResult(dsRest as DeepskinResult);
               setDeepskinWarning(null);
             } catch (parseErr: unknown) {
               const msg: string =
@@ -975,11 +1443,250 @@ export default function PipelineDemoPage() {
         ]);
         await ingestSurgwoundTriplet(surgExOutcome, surgHealOutcome, surgInfOutcome);
       }
+
+      lastPipelineBase64Ref.current = base64Image;
+      setPipelineRunComplete(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido ocorreu');
     } finally {
       setIsLoading(false);
       setLoadingStep('');
+    }
+  };
+
+  const handleSaveObservation = async () => {
+    if (!pipelineRunComplete) {
+      setObservationFeedback('Erro: conclua a análise antes de salvar.');
+      return;
+    }
+    const base64Image: string | null = lastPipelineBase64Ref.current;
+    if (base64Image === null || base64Image === '') {
+      setObservationFeedback('Erro: imagem do pipeline indisponível; execute a análise novamente.');
+      return;
+    }
+    if (!apiUrl) {
+      setObservationFeedback('Erro: API não disponível.');
+      return;
+    }
+
+    const trimmedObservation: string = observationText.trim();
+    if (trimmedObservation === '') {
+      setObservationFeedback('Erro: digite uma observação antes de salvar.');
+      return;
+    }
+
+    setIsSavingObservation(true);
+    setObservationFeedback(null);
+
+    const outcome: FetchOutcome = await fetchWithNetworkGrace(`${apiUrl}/observation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image: base64Image,
+        observation: trimmedObservation,
+      }),
+    });
+
+    setIsSavingObservation(false);
+
+    if (outcome.networkError !== null) {
+      setObservationFeedback(
+        `Erro: falha de rede ao salvar (${outcome.networkError.message}).`
+      );
+      return;
+    }
+    if (outcome.response === null) {
+      setObservationFeedback('Erro: resposta vazia do servidor.');
+      return;
+    }
+
+    const response: Response = outcome.response;
+    if (!response.ok) {
+      let detail: string = `HTTP ${String(response.status)}`;
+      try {
+        const body: unknown = await response.json();
+        if (
+          typeof body === 'object' &&
+          body !== null &&
+          typeof (body as Record<string, unknown>).error === 'string'
+        ) {
+          detail = (body as Record<string, unknown>).error as string;
+        }
+      } catch {
+        /* ignore */
+      }
+      setObservationFeedback(`Erro: não foi possível salvar (${detail}).`);
+      return;
+    }
+
+    const okBody: unknown = await response.json().catch(() => null);
+    if (okBody !== null) {
+      const { audit } = splitJsonWithAudit(okBody);
+      if (
+        audit !== null &&
+        (audit.image_id !== null || audit.observation_id !== null)
+      ) {
+        pipelineAuditTrailRef.current.push({
+          endpoint: 'POST /observation',
+          imageId: audit.image_id,
+          inferenceCallId: null,
+          observationId: audit.observation_id,
+        });
+      }
+    }
+
+    setObservationFeedback('Observação salva com sucesso.');
+  };
+
+  const handleExportPdf = async () => {
+    if (!pipelineRunComplete) {
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      const canonicalImageId: string | null =
+        pipelineAuditTrailRef.current.find(
+          (e: PipelineAuditClientRow) => e.imageId !== null
+        )?.imageId ?? null;
+
+      let auditDbRows: PipelineInferenceCallDbRow[] | null = null;
+      let auditDbError: string | null = null;
+      if (canonicalImageId !== null) {
+        const dbOutcome = await supabase
+          .from('inference_calls')
+          .select('id, endpoint, image_id, created_at')
+          .eq('image_id', canonicalImageId)
+          .order('id', { ascending: true });
+        if (dbOutcome.error !== null) {
+          auditDbError = dbOutcome.error.message;
+        } else if (dbOutcome.data !== null) {
+          const rows: unknown[] = dbOutcome.data as unknown[];
+          auditDbRows = rows.map((row: unknown) => {
+            const r = row as Record<string, unknown>;
+            const ca = r['created_at'];
+            return {
+              id: String(r['id']),
+              endpoint: String(r['endpoint']),
+              image_id: String(r['image_id']),
+              created_at:
+                ca === null || ca === undefined ? null : String(ca),
+            };
+          });
+        }
+      }
+
+      const mapSurgwoundRow = (
+        r: SurgwoundModalityResult | null
+      ): PipelineReportInput['surgwound']['exudate'] => {
+        if (r === null) {
+          return null;
+        }
+        return {
+          modality: r.modality,
+          predicted_label: r.predicted_label,
+          confidence: r.confidence,
+        };
+      };
+      const reportInput: PipelineReportInput = {
+        apiUrl,
+        imageBase64: lastPipelineBase64Ref.current,
+        fp: fpResult,
+        fpAdvice,
+        warnings: {
+          nail: nailWarning,
+          deepskin: deepskinWarning,
+          surgwound: surgwoundWarning,
+        },
+        segmentation:
+          segmentation !== null
+            ? {
+                wound_percentage: segmentation.wound_percentage,
+                wound_pixels: segmentation.wound_pixels,
+                original_width: segmentation.original_width,
+                original_height: segmentation.original_height,
+              }
+            : null,
+        segmentationVisualization:
+          sizeMeasurement !== null && Array.isArray(sizeMeasurement.dfu_mask)
+            ? {
+                dfu_mask: sizeMeasurement.dfu_mask,
+                reference_mask: pickReferenceMaskForOverlay(sizeMeasurement),
+                original_width: sizeMeasurement.original_width,
+                original_height: sizeMeasurement.original_height,
+              }
+            : segmentation !== null &&
+              Array.isArray(segmentation.mask) &&
+              segmentation.mask.length > 0 &&
+              segmentation.original_width > 0 &&
+              segmentation.original_height > 0
+              ? {
+                  dfu_mask: segmentation.mask,
+                  reference_mask: null,
+                  original_width: segmentation.original_width,
+                  original_height: segmentation.original_height,
+                }
+              : null,
+        size_calibration_method: sizeCalibrationMethod,
+        sizeMeasurement:
+          sizeMeasurement !== null
+            ? {
+                dfu_area_cm2: sizeMeasurement.dfu_area_cm2,
+                dfu_area_mm2: sizeMeasurement.dfu_area_mm2,
+                nail_detected: sizeMeasurement.nail_detected,
+                aruco_detected: sizeMeasurement.aruco_detected === true,
+                dfu_detected: sizeMeasurement.dfu_detected,
+                px_per_mm: sizeMeasurement.px_per_mm,
+                calibration_source: sizeMeasurement.calibration_source,
+                dfu_dimensions: {
+                  length_mm: sizeMeasurement.dfu_dimensions.length_mm,
+                  width_mm: sizeMeasurement.dfu_dimensions.width_mm,
+                },
+                nail_dimensions:
+                  sizeMeasurement.nail_dimensions !== undefined
+                    ? sizeMeasurement.nail_dimensions
+                    : null,
+                printed_marker_square_side_mm:
+                  sizeMeasurement.printed_marker_square_side_mm !== undefined
+                    ? sizeMeasurement.printed_marker_square_side_mm
+                    : null,
+                original_width: sizeMeasurement.original_width,
+                original_height: sizeMeasurement.original_height,
+              }
+            : null,
+        tissue: tissueResult,
+        deepskin: deepskinResult,
+        deepskinWarning,
+        surgwound: {
+          exudate: mapSurgwoundRow(surgwoundExudate),
+          healing: mapSurgwoundRow(surgwoundHealing),
+          infection: mapSurgwoundRow(surgwoundInfection),
+        },
+        laser:
+          laserDecision !== null
+            ? {
+                message: laserDecision.message,
+                input: {
+                  tecido: laserDecision.input.tecido,
+                  qtd_exudato: laserDecision.input.qtd_exudato,
+                  tipo_exsudato: laserDecision.input.tipo_exsudato,
+                  sinais_infeccao: laserDecision.input.sinais_infeccao,
+                  status: laserDecision.input.status,
+                },
+              }
+            : null,
+        observationDraft: observationText,
+        auditClientTrail: pipelineAuditTrailRef.current.slice(),
+        auditDbRows,
+        auditDbError,
+      };
+      await downloadPipelineReport(reportInput);
+    } catch (exportErr: unknown) {
+      const message: string =
+        exportErr instanceof Error ? exportErr.message : 'Erro desconhecido ao gerar PDF';
+      console.error('Export PDF failed:', exportErr);
+      setError(`Falha ao exportar PDF: ${message}`);
+    } finally {
+      setIsExportingPdf(false);
     }
   };
 
@@ -1000,6 +1707,13 @@ export default function PipelineDemoPage() {
     setNailWarning(null);
     setFpResult(null);
     setFpAdvice(null);
+    setObservationText('');
+    setPipelineRunComplete(false);
+    setObservationFeedback(null);
+    lastPipelineBase64Ref.current = null;
+    pipelineAuditTrailRef.current = [];
+    setIsSavingObservation(false);
+    setIsExportingPdf(false);
   };
 
   const getTissueColor = (tissueType: string | undefined | null): string => {
@@ -1040,10 +1754,23 @@ export default function PipelineDemoPage() {
       <div className="block md:hidden h-screen w-screen flex flex-col bg-gray-50">
         {/* Header */}
         <div className="bg-blue-600 text-white p-4 shadow-md">
-          <h1 className="text-lg font-bold">Detecção de Feridas</h1>
-          {apiUrl && (
-            <p className="text-xs mt-1 opacity-90">API Ativa</p>
-          )}
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h1 className="text-lg font-bold">Detecção de Feridas</h1>
+              {apiUrl && (
+                <p className="text-xs mt-1 opacity-90">API Ativa</p>
+              )}
+            </div>
+            <Link
+              href="/inferences"
+              className="shrink-0 rounded-md bg-white/15 px-2 py-1.5 text-xs font-medium text-white hover:bg-white/25"
+            >
+              <span className="inline-flex items-center gap-1">
+                <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+                Inferências
+              </span>
+            </Link>
+          </div>
         </div>
 
         {/* Content Area - Scrollable */}
@@ -1127,13 +1854,31 @@ export default function PipelineDemoPage() {
                 className="w-full rounded-lg border border-gray-200"
               />
               {!isLoading && !segmentation && (
-                <button
-                  onClick={handleUploadAndPredict}
-                  disabled={!selectedFile}
-                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium mt-3 active:bg-blue-700 disabled:bg-gray-400"
-                >
-                  Analisar Imagem
-                </button>
+                <>
+                  <div className="mt-3 border-t border-gray-100 pt-3">
+                    <SizeCalibrationRadios
+                      value={sizeCalibrationMethod}
+                      onChange={setSizeCalibrationMethod}
+                      disabled={isLoading}
+                      layout="mobile"
+                    />
+                    {sizeCalibrationMethod === 'aruco' && (
+                      <ArucoMarkerSideCmField
+                        valueCm={arucoMarkerSideCm}
+                        onChangeValueCm={setArucoMarkerSideCm}
+                        disabled={isLoading}
+                        layout="mobile"
+                      />
+                    )}
+                  </div>
+                  <button
+                    onClick={handleUploadAndPredict}
+                    disabled={!selectedFile}
+                    className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium mt-3 active:bg-blue-700 disabled:bg-gray-400"
+                  >
+                    Analisar Imagem
+                  </button>
+                </>
               )}
             </div>
           ) : (
@@ -1189,13 +1934,15 @@ export default function PipelineDemoPage() {
                     />
                   </div>
                   {/* Legend */}
-                  {sizeMeasurement?.nail_detected && (
-                    <div className="flex gap-4 mt-2 text-xs text-gray-600">
+                  {sizeMeasurement !== null &&
+                    pickReferenceMaskForOverlay(sizeMeasurement) !== null && (
+                    <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-600">
                       <span className="flex items-center gap-1">
-                        <span className="w-3 h-3 rounded bg-blue-500"></span> Ferida
+                        <span className="inline-block h-3 w-3 rounded bg-blue-500" /> Ferida
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-3 h-3 rounded bg-green-500"></span> Unha
+                        <span className="inline-block h-3 w-3 rounded bg-green-500" />
+                        {sizeMeasurement.aruco_detected === true ? 'Marcadores ArUco' : 'Referência (unha)'}
                       </span>
                     </div>
                   )}
@@ -1216,33 +1963,87 @@ export default function PipelineDemoPage() {
                   )}
                 </div>
 
-                {/* Nail Detection Status */}
-                <div className={`rounded-lg p-3 ${sizeMeasurement?.nail_detected ? 'bg-green-50' : 'bg-amber-50'}`}>
-                  <p className="text-xs text-gray-600 mb-1">Detecção de Unha</p>
-                  <p className={`text-base font-bold ${sizeMeasurement?.nail_detected ? 'text-green-700' : 'text-amber-700'}`}>
-                    {sizeMeasurement?.nail_detected ? 'Detectada' : 'Não Detectada'}
-                  </p>
-                </div>
+                {sizeMeasurement !== null && (
+                  <div
+                    className={`rounded-lg p-3 ${
+                      sizeCalibrationMethod === 'nail'
+                        ? sizeMeasurement.nail_detected
+                          ? 'bg-green-50'
+                          : 'bg-amber-50'
+                        : sizeMeasurement.aruco_detected === true
+                          ? 'bg-green-50'
+                          : 'bg-amber-50'
+                    }`}
+                  >
+                    <p className="text-xs text-gray-600 mb-1">
+                      {sizeCalibrationMethod === 'nail'
+                        ? 'Detecção de Unha'
+                        : 'Marcadores ArUco (ids 0 e 1)'}
+                    </p>
+                    <p
+                      className={`text-base font-bold ${
+                        sizeCalibrationMethod === 'nail'
+                          ? sizeMeasurement.nail_detected
+                            ? 'text-green-700'
+                            : 'text-amber-700'
+                          : sizeMeasurement.aruco_detected === true
+                            ? 'text-green-700'
+                            : 'text-amber-700'
+                      }`}
+                    >
+                      {sizeCalibrationMethod === 'nail'
+                        ? sizeMeasurement.nail_detected
+                          ? 'Detectada'
+                          : 'Não detectada'
+                        : sizeMeasurement.aruco_detected === true
+                          ? 'Detectados'
+                          : 'Não detectados'}
+                    </p>
+                  </div>
+                )}
 
-                {/* Size Measurement - Only if nail detected */}
-                {sizeMeasurement?.nail_detected && sizeMeasurement?.dfu_detected && (
+                {showRealWorldSizing(sizeMeasurement, sizeCalibrationMethod) && sizeMeasurement !== null && (
                   <>
                     <div className="bg-blue-50 rounded-lg p-3">
                       <p className="text-xs text-gray-600 mb-1">Tamanho Estimado da Ferida</p>
                       <p className="text-xl font-bold text-blue-700">
                         {sizeMeasurement.dfu_area_cm2.toFixed(2)} cm²
                       </p>
+                      <p className="text-xs text-blue-800 mt-1">
+                        {sizeMeasurement.dfu_dimensions.length_mm.toFixed(1)}mm ×{' '}
+                        {sizeMeasurement.dfu_dimensions.width_mm.toFixed(1)}mm
+                      </p>
                     </div>
 
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <p className="text-xs text-gray-600 mb-1">Tamanho da unha considerado</p>
-                      <p className="text-sm font-medium text-gray-900">
-                        {sizeMeasurement.nail_dimensions.length_mm.toFixed(1)}mm x {sizeMeasurement.nail_dimensions.width_mm.toFixed(1)}mm
-                      </p>
-                      <p className="text-xs text-amber-700 mt-2">
-                        Estimativa considera que a unha e a ferida estão à mesma distância da câmera
-                      </p>
-                    </div>
+                    {sizeCalibrationMethod === 'nail' &&
+                      sizeMeasurement.nail_dimensions !== undefined && (
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-600 mb-1">Tamanho da unha considerado</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {sizeMeasurement.nail_dimensions.length_mm.toFixed(1)}mm ×{' '}
+                            {sizeMeasurement.nail_dimensions.width_mm.toFixed(1)}mm
+                          </p>
+                          <p className="text-xs text-amber-700 mt-2">
+                            Estimativa considera que a unha e a ferida estão à mesma distância da
+                            câmera
+                          </p>
+                        </div>
+                      )}
+
+                    {sizeCalibrationMethod === 'aruco' &&
+                      typeof sizeMeasurement.printed_marker_square_side_mm === 'number' && (
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-600 mb-1">Marcadores (calibração)</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            Lado físico:{' '}
+                            {sizeMeasurement.printed_marker_square_side_mm.toFixed(1)} mm cada
+                            (média px/mm dos ids 0 e 1)
+                          </p>
+                          <p className="text-xs text-amber-700 mt-2">
+                            Escala a partir da média dos dois marcadores na mesma tira.
+                          </p>
+                        </div>
+                      )}
                   </>
                 )}
 
@@ -1345,6 +2146,24 @@ export default function PipelineDemoPage() {
               </div>
             </div>
           )}
+
+          {pipelineRunComplete && (
+            <>
+              <PdfExportSection
+                layout="mobile"
+                isExporting={isExportingPdf}
+                onExport={handleExportPdf}
+              />
+              <ObservationSection
+                observationText={observationText}
+                onObservationChange={setObservationText}
+                onSave={handleSaveObservation}
+                isSaving={isSavingObservation}
+                feedback={observationFeedback}
+                layout="mobile"
+              />
+            </>
+          )}
         </div>
 
         {/* Bottom Camera Button - Fixed */}
@@ -1373,9 +2192,18 @@ export default function PipelineDemoPage() {
       </div>
       <div className="hidden md:block min-h-screen bg-gray-50 py-8 px-4">
         <div className="max-w-4xl mx-auto flex flex-col gap-2">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">
-            Demonstração do Pipeline de Detecção de DFU
-          </h1>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Demonstração do Pipeline de Detecção de DFU
+            </h1>
+            <Link
+              href="/inferences"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50"
+            >
+              <LayoutGrid className="h-4 w-4" aria-hidden />
+              Ver inferências
+            </Link>
+          </div>
 
           {apiUrl && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
@@ -1420,6 +2248,21 @@ export default function PipelineDemoPage() {
                     className="max-w-md rounded-lg border border-gray-300"
                   />
                 </div>
+              )}
+
+              <SizeCalibrationRadios
+                value={sizeCalibrationMethod}
+                onChange={setSizeCalibrationMethod}
+                disabled={isLoading}
+                layout="desktop"
+              />
+              {sizeCalibrationMethod === 'aruco' && (
+                <ArucoMarkerSideCmField
+                  valueCm={arucoMarkerSideCm}
+                  onChangeValueCm={setArucoMarkerSideCm}
+                  disabled={isLoading}
+                  layout="desktop"
+                />
               )}
 
               <button
@@ -1524,13 +2367,15 @@ export default function PipelineDemoPage() {
                     />
                   </div>
                   {/* Legend */}
-                  {sizeMeasurement?.nail_detected && (
-                    <div className="flex gap-4 mt-2 text-sm text-gray-600">
+                  {sizeMeasurement !== null &&
+                    pickReferenceMaskForOverlay(sizeMeasurement) !== null && (
+                    <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600">
                       <span className="flex items-center gap-2">
-                        <span className="w-4 h-4 rounded bg-blue-500"></span> Ferida
+                        <span className="inline-block h-4 w-4 rounded bg-blue-500" /> Ferida
                       </span>
                       <span className="flex items-center gap-2">
-                        <span className="w-4 h-4 rounded bg-green-500"></span> Unha
+                        <span className="inline-block h-4 w-4 rounded bg-green-500" />
+                        {sizeMeasurement.aruco_detected === true ? 'Marcadores ArUco' : 'Referência (unha)'}
                       </span>
                     </div>
                   )}
@@ -1550,12 +2395,49 @@ export default function PipelineDemoPage() {
                   )}
                 </div>
 
-                <div className={`rounded-lg p-4 ${sizeMeasurement?.nail_detected ? 'bg-green-50' : 'bg-amber-50'}`}>
-                  <p className="text-sm text-gray-600 mb-1">Detecção de Unha</p>
-                  <p className={`text-2xl font-bold ${sizeMeasurement?.nail_detected ? 'text-green-700' : 'text-amber-700'}`}>
-                    {sizeMeasurement?.nail_detected ? 'Detectada' : 'Não Detectada'}
-                  </p>
-                </div>
+                {sizeMeasurement !== null ? (
+                  <div
+                    className={`rounded-lg p-4 ${
+                      sizeCalibrationMethod === 'nail'
+                        ? sizeMeasurement.nail_detected
+                          ? 'bg-green-50'
+                          : 'bg-amber-50'
+                        : sizeMeasurement.aruco_detected === true
+                          ? 'bg-green-50'
+                          : 'bg-amber-50'
+                    }`}
+                  >
+                    <p className="text-sm text-gray-600 mb-1">
+                      {sizeCalibrationMethod === 'nail'
+                        ? 'Detecção de Unha'
+                        : 'Marcadores ArUco (0 e 1)'}
+                    </p>
+                    <p
+                      className={`text-2xl font-bold ${
+                        sizeCalibrationMethod === 'nail'
+                          ? sizeMeasurement.nail_detected
+                            ? 'text-green-700'
+                            : 'text-amber-700'
+                          : sizeMeasurement.aruco_detected === true
+                            ? 'text-green-700'
+                            : 'text-amber-700'
+                      }`}
+                    >
+                      {sizeCalibrationMethod === 'nail'
+                        ? sizeMeasurement.nail_detected
+                          ? 'Detectada'
+                          : 'Não detectada'
+                        : sizeMeasurement.aruco_detected === true
+                          ? 'Detectados'
+                          : 'Não detectados'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-gray-50 p-4">
+                    <p className="text-sm text-gray-600 mb-1">Calibração de escala</p>
+                    <p className="text-sm font-medium text-gray-500">Indisponível (apenas segmentação)</p>
+                  </div>
+                )}
 
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Pixels da Ferida</p>
@@ -1572,39 +2454,80 @@ export default function PipelineDemoPage() {
                 </div>
               </div>
 
-              {/* Size Measurement Section - Only if nail detected */}
-              {sizeMeasurement?.nail_detected && sizeMeasurement?.dfu_detected && (
-                <div className="border-t border-gray-200 pt-4 mt-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Medição de Tamanho</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                      <p className="text-sm font-medium text-blue-800 mb-1">Tamanho Estimado da Ferida</p>
-                      <p className="text-3xl font-bold text-blue-900">
-                        {sizeMeasurement.dfu_area_cm2.toFixed(2)} cm²
-                      </p>
-                      <p className="text-sm text-blue-700 mt-1">
-                        ({sizeMeasurement.dfu_dimensions.length_mm.toFixed(1)}mm x {sizeMeasurement.dfu_dimensions.width_mm.toFixed(1)}mm)
-                      </p>
+              {/* Size measurement (physical scale from ArUco or nail) */}
+              {showRealWorldSizing(sizeMeasurement, sizeCalibrationMethod) &&
+                sizeMeasurement !== null && (
+                  <div className="border-t border-gray-200 pt-4 mt-4">
+                    <h3 className="mb-3 text-lg font-semibold text-gray-800">
+                      Medição de Tamanho
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                        <p className="mb-1 text-sm font-medium text-blue-800">
+                          Tamanho Estimado da Ferida
+                        </p>
+                        <p className="text-3xl font-bold text-blue-900">
+                          {sizeMeasurement.dfu_area_cm2.toFixed(2)} cm²
+                        </p>
+                        <p className="mt-1 text-sm text-blue-700">
+                          ({sizeMeasurement.dfu_dimensions.length_mm.toFixed(1)}mm ×{' '}
+                          {sizeMeasurement.dfu_dimensions.width_mm.toFixed(1)}mm)
+                        </p>
+                      </div>
+
+                      {sizeCalibrationMethod === 'nail' &&
+                        sizeMeasurement.nail_dimensions !== undefined && (
+                          <div className="rounded-lg bg-gray-50 p-4">
+                            <p className="mb-1 text-sm font-medium text-gray-700">
+                              Tamanho da Unha Considerado
+                            </p>
+                            <p className="text-xl font-bold text-gray-900">
+                              {sizeMeasurement.nail_dimensions.length_mm.toFixed(1)}mm ×{' '}
+                              {sizeMeasurement.nail_dimensions.width_mm.toFixed(1)}mm
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Fonte:{' '}
+                              {sizeMeasurement.calibration_source === 'user_provided'
+                                ? 'Fornecido pelo usuário'
+                                : 'Média populacional'}
+                            </p>
+                          </div>
+                        )}
+
+                      {sizeCalibrationMethod === 'aruco' &&
+                        typeof sizeMeasurement.printed_marker_square_side_mm === 'number' && (
+                          <div className="rounded-lg bg-gray-50 p-4">
+                            <p className="mb-1 text-sm font-medium text-gray-700">
+                              Marcadores (calibração)
+                            </p>
+                            <p className="text-xl font-bold text-gray-900">
+                              Lado físico:{' '}
+                              {sizeMeasurement.printed_marker_square_side_mm.toFixed(1)} mm cada
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Escala: média px/mm dos marcadores ids 0 e 1 ({sizeMeasurement.calibration_source})
+                            </p>
+                          </div>
+                        )}
                     </div>
 
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <p className="text-sm font-medium text-gray-700 mb-1">Tamanho da Unha Considerado</p>
-                      <p className="text-xl font-bold text-gray-900">
-                        {sizeMeasurement.nail_dimensions.length_mm.toFixed(1)}mm x {sizeMeasurement.nail_dimensions.width_mm.toFixed(1)}mm
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Fonte: {sizeMeasurement.calibration_source === 'user_provided' ? 'Fornecido pelo usuário' : 'Média populacional'}
-                      </p>
-                    </div>
+                    {sizeCalibrationMethod === 'nail' ? (
+                      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-sm text-amber-800">
+                          <span className="font-semibold">Nota:</span> A estimativa considera que a unha e
+                          a ferida estão à mesma distância da câmera.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-sm text-amber-800">
+                          <span className="font-semibold">Nota:</span> A escala segue a média dos dois
+                          marcadores ArUco impressos ao lado da ferida na mesma tira.
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
-                    <p className="text-sm text-amber-800">
-                      <span className="font-semibold">Nota:</span> A estimativa de tamanho considera que a unha e a ferida estão à mesma distância da câmera.
-                    </p>
-                  </div>
-                </div>
-              )}
+                )}
             </div>
           )}
 
@@ -1691,6 +2614,24 @@ export default function PipelineDemoPage() {
                 </div>
               </div>
             </div>
+          )}
+
+          {pipelineRunComplete && (
+            <>
+              <PdfExportSection
+                layout="desktop"
+                isExporting={isExportingPdf}
+                onExport={handleExportPdf}
+              />
+              <ObservationSection
+                observationText={observationText}
+                onObservationChange={setObservationText}
+                onSave={handleSaveObservation}
+                isSaving={isSavingObservation}
+                feedback={observationFeedback}
+                layout="desktop"
+              />
+            </>
           )}
         </div>
       </div>
