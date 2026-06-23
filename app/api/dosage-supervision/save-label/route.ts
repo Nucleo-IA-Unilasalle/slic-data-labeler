@@ -79,6 +79,7 @@ export async function POST(request: Request) {
       shown_suggestion: body.shown_suggestion ?? null,
       dosage_obs: body.dosage_obs || null,
       skipped: false,
+      applied_lasers_json: body.applied_lasers_json || null,
     });
 
     if (error) {
