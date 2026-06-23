@@ -613,7 +613,7 @@ export default function DosageSupervisionPage() {
                 <Label className="text-base font-semibold">Dosagem por Laser (J/cm²)</Label>
                 <div className={`space-y-6 ${!isEligible ? 'opacity-40 pointer-events-none' : ''}`}>
                   {/* Vermelho */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 border border-border rounded-lg p-4 bg-muted/10">
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-sm flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />
@@ -623,23 +623,79 @@ export default function DosageSupervisionPage() {
                         {redDose === 0 ? 'Desativado' : `${redDose} J/cm²`}
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="20"
-                      step="0.5"
-                      value={redDose}
-                      disabled={!isEligible}
-                      onChange={(e) => {
-                        setRedDose(parseFloat(e.target.value));
-                        trackEditedField('custom_dose');
-                      }}
-                      className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-red-500"
-                    />
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="range"
+                        min="0"
+                        max="20"
+                        step="0.5"
+                        value={redDose}
+                        disabled={!isEligible}
+                        onChange={(e) => {
+                          setRedDose(parseFloat(e.target.value) || 0);
+                          trackEditedField('custom_dose');
+                        }}
+                        className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                        style={{
+                          background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${(redDose / 20) * 100}%, var(--border) ${(redDose / 20) * 100}%, var(--border) 100%)`,
+                          accentColor: '#ef4444'
+                        }}
+                      />
+                      <div className="flex items-center gap-2 w-28 shrink-0">
+                        <input
+                          type="number"
+                          min="0"
+                          max="25"
+                          step="0.5"
+                          value={redDose > 0 ? redDose : ''}
+                          placeholder="--"
+                          disabled={!isEligible}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setRedDose(isNaN(val) ? 0 : val);
+                            trackEditedField('custom_dose');
+                          }}
+                          className="w-16 px-2 py-1 text-center text-sm font-semibold border rounded bg-background"
+                        />
+                        <span className="text-xs text-muted-foreground">J/cm²</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                      <span className="text-muted-foreground mr-1">Atalhos:</span>
+                      {[2, 3, 4, 6].map((v) => (
+                        <Button
+                          key={v}
+                          variant="outline"
+                          size="sm"
+                          type="button"
+                          disabled={!isEligible}
+                          onClick={() => {
+                            setRedDose(v);
+                            trackEditedField('custom_dose');
+                          }}
+                          className="h-7 px-2"
+                        >
+                          {v} J
+                        </Button>
+                      ))}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        disabled={!isEligible}
+                        onClick={() => {
+                          setRedDose(0);
+                          trackEditedField('custom_dose');
+                        }}
+                        className="h-7 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                      >
+                        Zerar
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Infravermelho */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 border border-border rounded-lg p-4 bg-muted/10">
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-sm flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full bg-amber-700 inline-block" />
@@ -649,23 +705,79 @@ export default function DosageSupervisionPage() {
                         {infraDose === 0 ? 'Desativado' : `${infraDose} J/cm²`}
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="20"
-                      step="0.5"
-                      value={infraDose}
-                      disabled={!isEligible}
-                      onChange={(e) => {
-                        setInfraDose(parseFloat(e.target.value));
-                        trackEditedField('custom_dose');
-                      }}
-                      className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-amber-700"
-                    />
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="range"
+                        min="0"
+                        max="20"
+                        step="0.5"
+                        value={infraDose}
+                        disabled={!isEligible}
+                        onChange={(e) => {
+                          setInfraDose(parseFloat(e.target.value) || 0);
+                          trackEditedField('custom_dose');
+                        }}
+                        className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                        style={{
+                          background: `linear-gradient(to right, #b45309 0%, #b45309 ${(infraDose / 20) * 100}%, var(--border) ${(infraDose / 20) * 100}%, var(--border) 100%)`,
+                          accentColor: '#b45309'
+                        }}
+                      />
+                      <div className="flex items-center gap-2 w-28 shrink-0">
+                        <input
+                          type="number"
+                          min="0"
+                          max="25"
+                          step="0.5"
+                          value={infraDose > 0 ? infraDose : ''}
+                          placeholder="--"
+                          disabled={!isEligible}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setInfraDose(isNaN(val) ? 0 : val);
+                            trackEditedField('custom_dose');
+                          }}
+                          className="w-16 px-2 py-1 text-center text-sm font-semibold border rounded bg-background"
+                        />
+                        <span className="text-xs text-muted-foreground">J/cm²</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                      <span className="text-muted-foreground mr-1">Atalhos:</span>
+                      {[4, 6, 8, 10].map((v) => (
+                        <Button
+                          key={v}
+                          variant="outline"
+                          size="sm"
+                          type="button"
+                          disabled={!isEligible}
+                          onClick={() => {
+                            setInfraDose(v);
+                            trackEditedField('custom_dose');
+                          }}
+                          className="h-7 px-2"
+                        >
+                          {v} J
+                        </Button>
+                      ))}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        disabled={!isEligible}
+                        onClick={() => {
+                          setInfraDose(0);
+                          trackEditedField('custom_dose');
+                        }}
+                        className="h-7 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                      >
+                        Zerar
+                      </Button>
+                    </div>
                   </div>
 
                   {/* Azul */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 border border-border rounded-lg p-4 bg-muted/10">
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-sm flex items-center gap-2">
                         <span className="w-3 h-3 rounded-full bg-blue-500 inline-block" />
@@ -675,19 +787,75 @@ export default function DosageSupervisionPage() {
                         {blueDose === 0 ? 'Desativado' : `${blueDose} J/cm²`}
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="20"
-                      step="0.5"
-                      value={blueDose}
-                      disabled={!isEligible}
-                      onChange={(e) => {
-                        setBlueDose(parseFloat(e.target.value));
-                        trackEditedField('custom_dose');
-                      }}
-                      className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    />
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="range"
+                        min="0"
+                        max="20"
+                        step="0.5"
+                        value={blueDose}
+                        disabled={!isEligible}
+                        onChange={(e) => {
+                          setBlueDose(parseFloat(e.target.value) || 0);
+                          trackEditedField('custom_dose');
+                        }}
+                        className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                        style={{
+                          background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(blueDose / 20) * 100}%, var(--border) ${(blueDose / 20) * 100}%, var(--border) 100%)`,
+                          accentColor: '#3b82f6'
+                        }}
+                      />
+                      <div className="flex items-center gap-2 w-28 shrink-0">
+                        <input
+                          type="number"
+                          min="0"
+                          max="25"
+                          step="0.5"
+                          value={blueDose > 0 ? blueDose : ''}
+                          placeholder="--"
+                          disabled={!isEligible}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setBlueDose(isNaN(val) ? 0 : val);
+                            trackEditedField('custom_dose');
+                          }}
+                          className="w-16 px-2 py-1 text-center text-sm font-semibold border rounded bg-background"
+                        />
+                        <span className="text-xs text-muted-foreground">J/cm²</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                      <span className="text-muted-foreground mr-1">Atalhos:</span>
+                      {[1, 2, 3].map((v) => (
+                        <Button
+                          key={v}
+                          variant="outline"
+                          size="sm"
+                          type="button"
+                          disabled={!isEligible}
+                          onClick={() => {
+                            setBlueDose(v);
+                            trackEditedField('custom_dose');
+                          }}
+                          className="h-7 px-2"
+                        >
+                          {v} J
+                        </Button>
+                      ))}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        disabled={!isEligible}
+                        onClick={() => {
+                          setBlueDose(0);
+                          trackEditedField('custom_dose');
+                        }}
+                        className="h-7 px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                      >
+                        Zerar
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
