@@ -75,6 +75,17 @@ export interface DosageContext {
     intactAtRiskSkin?: boolean;
   };
   modelOutputs?: {
+    available?: boolean;
+    requestedImageName?: string;
+    matchedImageName?: string;
+    candidateImageNames?: string[];
+    sources?: {
+      slic: boolean;
+      vlm: boolean;
+    };
+    imageAvailability?: {
+      assignmentList: boolean;
+    };
     pwatScore?: number;
     slic?: unknown;
     cnn?: unknown;

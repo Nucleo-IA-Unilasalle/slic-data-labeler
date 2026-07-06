@@ -208,12 +208,20 @@ The workflow assigns each image across three presentation modes:
 - `context`: labeling with derived wound context.
 - `suggestion_review`: labeling with context plus a rule-based dosage suggestion.
 
+Assignments come from the full image list in `app/data/images_list.json`, so the module can be used across the datasets already present in the repository. Case context is enriched from the existing classification outputs in `app/api/supervision/slic.csv` and `app/api/supervision/vlm.csv` when matching rows exist. If an assigned image has no classification row yet, the API returns production metadata showing classification availability as false and the suggestion falls back to `not_sure` instead of using mock data.
+
 Labels are stored in the Supabase table `public.dosage_feedback`. The app uses these API routes:
 
 - `/api/dosage-supervision/list-cases`: picks the next assignment for a user.
 - `/api/dosage-supervision/case-context`: loads SLIC/VLM-derived context and optional rule suggestions.
 - `/api/dosage-supervision/save-label`: saves dosage decisions and selected laser doses.
 - `/api/dosage-supervision/skip-case`: records skipped assignments.
+
+The reusable context adapter lives in `lib/dosage/context.ts`. Run this smoke check after changing dataset naming, CSV formats, or dosage context rules:
+
+```bash
+npm run smoke:dosage-context
+```
 
 #### Supabase Setup
 

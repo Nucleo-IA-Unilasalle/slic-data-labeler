@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "smoke:dosage-context": "node scripts/smoke-dosage-context.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",
