@@ -354,7 +354,7 @@ export default function DosageSupervisionPage() {
           shown_context: context,
           shown_suggestion: suggestion,
           dosage_obs: observation.trim() || null,
-          applied_lasers_json: JSON.stringify(appliedLasers),
+          applied_lasers_json: appliedLasers,
         }),
       });
       const data = await response.json();

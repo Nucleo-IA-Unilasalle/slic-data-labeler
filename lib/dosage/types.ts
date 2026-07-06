@@ -115,5 +115,9 @@ export interface DosageFeedbackPayload {
   shown_context?: DosageContext | null;
   shown_suggestion?: DosageRuleSuggestion | null;
   dosage_obs?: string | null;
-  applied_lasers_json?: string | null;
+  applied_lasers_json?: {
+    red: number;
+    infrared: number;
+    blue: number;
+  } | null;
 }

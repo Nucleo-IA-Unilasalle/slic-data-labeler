@@ -108,7 +108,7 @@ function ensureSpace(doc: jsPDF, y: number, neededMm: number): number {
 }
 
 function addHeading(doc: jsPDF, y: number, title: string): number {
-  let nextY: number = ensureSpace(doc, y, 14);
+  const nextY: number = ensureSpace(doc, y, 14);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(0, 0, 0);

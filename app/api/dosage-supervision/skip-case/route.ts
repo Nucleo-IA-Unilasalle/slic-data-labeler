@@ -1,0 +1,84 @@
+'use server';
+
+import { NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { isDemoMode } from '@/lib/dosage/demo';
+
+async function createSupabaseClient() {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+
+    if (!body.username || !body.image_name || !body.presentation_mode || !body.assignment_sequence) {
+      return NextResponse.json({ error: 'Missing assignment fields' }, { status: 400 });
+    }
+
+    if (isDemoMode()) {
+      return NextResponse.json({ success: true, demo: true });
+    }
+
+    const supabase = await createSupabaseClient();
+    const { data: existingFeedback, error: queryError } = await supabase
+      .from('dosage_feedback')
+      .select('id')
+      .eq('user', body.username)
+      .eq('image_name', body.image_name)
+      .eq('presentation_mode', body.presentation_mode)
+      .single();
+
+    if (queryError && queryError.code !== 'PGRST116') {
+      throw new Error(`Failed to check existing dosage feedback: ${queryError.message}`);
+    }
+
+    if (existingFeedback) {
+      return NextResponse.json({ error: 'Case already processed for this user and mode' }, { status: 409 });
+    }
+
+    const { error } = await supabase.from('dosage_feedback').insert({
+      user: body.username,
+      image_name: body.image_name,
+      presentation_mode: body.presentation_mode,
+      assignment_sequence: body.assignment_sequence,
+      shown_context: body.shown_context ?? null,
+      shown_suggestion: body.shown_suggestion ?? null,
+      dosage_obs: body.dosage_obs || null,
+      skipped: true,
+    });
+
+    if (error) {
+      if (error.code === '23505') {
+        return NextResponse.json({ error: 'Duplicate assignment detected' }, { status: 409 });
+      }
+
+      throw new Error(`Failed to skip dosage case: ${error.message}`);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error skipping dosage case:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to skip dosage case' },
+      { status: 500 }
+    );
+  }
+}

@@ -18,6 +18,7 @@ A Next.js application for visualizing wound tissue analysis with superpixel segm
   - Pagination (24 samples per page) for optimal performance
   - Bulk data loading (single API request per page instead of multiple requests)
 - **Review System**: Manual review and correction of cluster classifications
+- **Dosage Supervision**: Blinded/context/suggestion-assisted labeling workflow for PBM dosage decisions
 - **Seen Tracking**: Mark samples as seen to avoid reviewing them multiple times
   - Random selector prioritizes unseen samples
   - Visual indicators for seen files
@@ -63,6 +64,29 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
+### Environment Variables
+
+Create `.env.local` from `.env.example` before running Supabase-backed pages:
+
+```bash
+cp .env.example .env.local
+```
+
+Set:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-or-publishable-key
+```
+
+Use the Supabase anon/publishable key only. Do not put a `service_role` key in any `NEXT_PUBLIC_*` variable.
+
+For a local dosage demo that does not write to Supabase, also set:
+
+```env
+NEXT_PUBLIC_DOSAGE_DEMO_MODE=1
+```
+
 ## Project Structure
 
 ```
@@ -76,6 +100,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 │   ├── dataset/                  # SLIC-processed wound data
 │   ├── dataset_reviewed/         # Human-reviewed corrections
 │   ├── images/                   # Original training images
+│   ├── dosage-supervision/        # PBM dosage labeling interface
 │   ├── grid/                     # Grid view page
 │   └── tissue_classification_model.pth  # Trained PyTorch model
 ├── components/
@@ -86,6 +111,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 │   ├── cnn_inference.py         # Python script for CNN inference
 │   └── requirements.txt         # Python dependencies
 └── lib/
+    ├── dosage/                   # Dosage assignment, demo, and rule helpers
     └── types/                    # TypeScript type definitions
 ```
 
@@ -171,6 +197,79 @@ Model architecture:
    - Navigate using Previous/Next buttons
    - Jump directly to any page using the page selector dropdown
    - Pagination controls available at both top and bottom of the page
+
+### Dosage Supervision
+
+Open `/dosage-supervision` to label photobiomodulation dosage decisions for wound cases.
+
+The workflow assigns each image across three presentation modes:
+
+- `blind`: image-only labeling.
+- `context`: labeling with derived wound context.
+- `suggestion_review`: labeling with context plus a rule-based dosage suggestion.
+
+Labels are stored in the Supabase table `public.dosage_feedback`. The app uses these API routes:
+
+- `/api/dosage-supervision/list-cases`: picks the next assignment for a user.
+- `/api/dosage-supervision/case-context`: loads SLIC/VLM-derived context and optional rule suggestions.
+- `/api/dosage-supervision/save-label`: saves dosage decisions and selected laser doses.
+- `/api/dosage-supervision/skip-case`: records skipped assignments.
+
+#### Supabase Setup
+
+Run the migration SQL in Supabase SQL Editor before using the real dosage workflow:
+
+```sql
+create table if not exists public.dosage_feedback (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  "user" text not null,
+  image_name text not null,
+  presentation_mode text not null check (presentation_mode in ('blind', 'context', 'suggestion_review')),
+  assignment_sequence integer not null,
+  decision_category text,
+  dose_range text,
+  custom_dose text,
+  wavelength text,
+  accepted_suggestion boolean,
+  edited_fields jsonb,
+  shown_context jsonb,
+  shown_suggestion jsonb,
+  dosage_obs text,
+  skipped boolean not null default false,
+  applied_lasers_json jsonb,
+  constraint dosage_feedback_user_image_mode_unique unique ("user", image_name, presentation_mode),
+  constraint dosage_feedback_user_sequence_unique unique ("user", assignment_sequence)
+);
+
+alter table public.dosage_feedback enable row level security;
+
+create policy "Allow public dosage feedback inserts"
+on public.dosage_feedback
+for insert
+to anon, authenticated
+with check (true);
+
+create policy "Allow public dosage feedback reads"
+on public.dosage_feedback
+for select
+to anon, authenticated
+using (true);
+
+create index if not exists dosage_feedback_user_image_idx
+  on public.dosage_feedback ("user", image_name);
+
+create index if not exists dosage_feedback_user_sequence_idx
+  on public.dosage_feedback ("user", assignment_sequence);
+
+create index if not exists dosage_feedback_user_mode_idx
+  on public.dosage_feedback ("user", presentation_mode);
+
+create index if not exists dosage_feedback_image_idx
+  on public.dosage_feedback (image_name);
+```
+
+The public `select` policy is required by the current app because assignment selection checks prior labels for the entered user. For public deployments, consider moving dosage writes and reads behind server-only service-role endpoints and tightening RLS.
 
 ## Learn More
 

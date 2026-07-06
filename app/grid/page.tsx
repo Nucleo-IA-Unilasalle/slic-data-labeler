@@ -344,23 +344,15 @@ export default function GridPage() {
 }
 
 function SampleCard({ sample }: { sample: SampleThumbnail }) {
-  const [originalImgSrc, setOriginalImgSrc] = useState<string>('');
   const [segmentedImgSrc, setSegmentedImgSrc] = useState<string>('');
   const [isHovered, setIsHovered] = useState<boolean>(false);
 
-  // Load original image on mount
-  useEffect(() => {
-    if (!sample.woundData) return;
-    setOriginalImgSrc(`/images_fuseg/${sample.woundData.image_filename}`);
-  }, [sample]);
-
-  // Generate segmented image on hover
-  useEffect(() => {
-    if (!sample.woundData || !isHovered || segmentedImgSrc) return;
+  const generateSegmentedImage = (): string | null => {
+    if (!sample.woundData) return null;
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) return null;
 
     const { width, height } = sample.woundData.image_dimensions;
     canvas.width = width;
@@ -428,17 +420,28 @@ function SampleCard({ sample }: { sample: SampleThumbnail }) {
     }
 
     ctx.putImageData(currentImageData, 0, 0);
-    setSegmentedImgSrc(canvas.toDataURL());
-  }, [sample, isHovered, segmentedImgSrc]);
+    return canvas.toDataURL();
+  };
+
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+    if (segmentedImgSrc) return;
+
+    const generatedImage = generateSegmentedImage();
+    if (generatedImage) {
+      setSegmentedImgSrc(generatedImage);
+    }
+  };
 
   const displayName = sample.filename.replace('.json', '');
+  const originalImgSrc = sample.woundData ? `/images_fuseg/${sample.woundData.image_filename}` : '';
   const currentImgSrc = isHovered && segmentedImgSrc ? segmentedImgSrc : originalImgSrc;
   
   return (
     <Link href={`/?file=${sample.filename}`}>
       <Card 
         className="hover:shadow-lg transition-shadow cursor-pointer overflow-hidden"
-        onMouseEnter={() => setIsHovered(true)}
+        onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setIsHovered(false)}
       >
         <CardContent className="p-0">
