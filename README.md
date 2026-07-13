@@ -1,231 +1,238 @@
-# Wound Analysis Visualizer
+# Wound Analysis Visualizer (Labeler de Dados SLIC)
 
-A Next.js application for visualizing wound tissue analysis with superpixel segmentation and cluster predictions. Features both SLIC algorithm-based classification and CNN model predictions.
+Aplicação Next.js para visualizar a análise de tecidos de feridas com segmentação por superpixels e predições de clusters. Combina classificação baseada no algoritmo **SLIC** e predições de um modelo **CNN**, além de fluxos de rotulagem (supervisão) para decisões de dosagem de fotobiomodulação (PBM).
+
 ![Wound Analysis Visualizer Screenshot](./image.png)
 
-## Features
+## Visão Geral
 
-- **SLIC Visualization**: View wound analysis using SLIC (Simple Linear Iterative Clustering) algorithm
-- **CNN Visualization**: View wound analysis using trained CNN model for improved tissue classification
-- **Interactive Interface**: Click and hover over clusters to inspect detailed tissue composition
-- **Original Image Comparison**: Toggle between segmented and original images
-- **Grid View**: Browse samples in a paginated grid layout for quick overview
-  - Shows original wound images by default
-  - Hover to see segmented view with tissue overlay
-  - Display tissue composition percentages
-  - Visual indicators for reviewed and seen files
-  - Click to navigate to detailed view
-  - Pagination (24 samples per page) for optimal performance
-  - Bulk data loading (single API request per page instead of multiple requests)
-- **Review System**: Manual review and correction of cluster classifications
-- **Dosage Supervision**: Blinded/context/suggestion-assisted labeling workflow for PBM dosage decisions
-- **Seen Tracking**: Mark samples as seen to avoid reviewing them multiple times
-  - Random selector prioritizes unseen samples
-  - Visual indicators for seen files
-  - Persistent across browser sessions
-- **Smart Filtering**: Sort files by tissue composition
-  - Filter by most necrotic wounds
-  - Filter by most slough
-  - Filter by most red tissue
-  - Helps systematic review of specific wound types
+Este repositório faz parte do projeto de determinação de parâmetros de feridas (`wound-parameter-determination`). Ele serve como ferramenta de **rotulagem e visualização** de dados gerados pelo pipeline SLIC, permitindo revisão humana, supervisão de dosagem e exportação de resultados.
 
-## Getting Started
+## Funcionalidades
 
-### Prerequisites
+- **Visualização SLIC**: exibe a análise da ferida usando o algoritmo SLIC (Simple Linear Iterative Clustering).
+- **Visualização CNN**: exibe a análise usando um modelo CNN treinado para classificação de tecidos mais precisa.
+- **Interface interativa**: clique e passe o mouse sobre os clusters para inspecionar a composição detalhada de tecidos.
+- **Comparação com imagem original**: alterne entre a imagem segmentada e a original.
+- **Visão em grade (Grid)**: navegue pelas amostras em uma grade paginada.
+  - Mostra as imagens originais da ferida por padrão.
+  - Ao passar o mouse, exibe a visão segmentada com sobreposição de tecidos.
+  - Exibe percentuais de composição de tecido.
+  - Indicadores visuais de arquivos revisados e vistos.
+  - Clique para ir para a visão detalhada.
+  - Paginação (24 amostras por página) para melhor desempenho.
+  - Carregamento em lote (uma única requisição de API por página).
+- **Sistema de revisão**: revisão e correção manual das classificações de clusters.
+- **Supervisão de dosagem**: fluxo de rotulagem assistido (cego/contexto/sugestão) para decisões de dosagem PBM.
+- **Rastreamento de "visto"**: marque amostras como vistas para evitar revisá-las várias vezes.
+  - O seletor aleatório prioriza amostras não vistas.
+  - Indicadores visuais persistentes entre sessões.
+- **Filtragem inteligente**: ordene arquivos por composição de tecido (necrose, slough, tecido vermelho).
 
-1. **Node.js** (v18 or higher)
-2. **Python** (v3.8 or higher) - Required for CNN inference
+## Páginas
 
-### Installation
+- `/` — Visualizador principal (SLIC/CNN) com revisão e filtros.
+- `/grid` — Visão em grade paginada das amostras.
+- `/dashboard` — Painel com gráficos e estatísticas dos datasets.
+- `/inferences` — Listagem de inferências salvas (via Supabase).
+- `/json-view` — Visualizador e copiador de JSON de classificações.
+- `/lista-avaliacoes` — Lista de avaliações realizadas.
+- `/download` — Exportação/baixar dados rotulados.
+- `/pwat` — Ferramenta relacionada a escores PWA (Pressure Ulcer/Wound Assessment Tool).
+- `/pipeline-demo` — Demonstração do pipeline de processamento de imagens.
+- `/dosage-supervision` — Interface de rotulagem de dosagem PBM (fluxo completo).
+- `/minimalistic-supervision` e `/minimalistic-supervision-v2` — Versões enxutas do fluxo de supervisão.
 
-1. Install Node.js dependencies:
+## Como começar
+
+### Pré-requisitos
+
+1. **Node.js** (v18 ou superior)
+2. **Bun** (recomendado) ou npm
+3. **Python** (v3.8 ou superior) — necessário para inferência CNN
+
+### Instalação
+
+1. Instale as dependências do Node:
 
 ```bash
 npm install
-# or
+# ou
 bun install
 ```
 
-2. Install Python dependencies for CNN inference:
+2. Instale as dependências Python para inferência CNN:
 
 ```bash
 pip install -r scripts/requirements.txt
 ```
 
-### Running the Application
+### Executando a aplicação
 
-Start the development server:
+Inicie o servidor de desenvolvimento:
 
 ```bash
 npm run dev
-# or
+# ou
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
+Abra [http://localhost:3000](http://localhost:3000) no navegador.
 
-### Environment Variables
+### Variáveis de ambiente
 
-Create `.env.local` from `.env.example` before running Supabase-backed pages:
+Crie o `.env.local` a partir do `.env.example` antes de usar as páginas com Supabase:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Set:
+Defina:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-or-publishable-key
 ```
 
-Use the Supabase anon/publishable key only. Do not put a `service_role` key in any `NEXT_PUBLIC_*` variable.
+Use apenas a chave anon/publicável do Supabase. Nunca coloque uma chave `service_role` em variáveis `NEXT_PUBLIC_*`.
 
-For a local dosage demo that does not write to Supabase, also set:
+Para uma demonstração local de dosagem que não grava no Supabase, defina também:
 
 ```env
 NEXT_PUBLIC_DOSAGE_DEMO_MODE=1
 ```
 
-## Project Structure
+## Estrutura do projeto
 
 ```
 .
 ├── app/
-│   ├── api/                      # API routes
-│   │   ├── cnn-predict/         # CNN inference endpoint
-│   │   ├── data-files/          # Data file endpoints
-│   │   ├── data-files-bulk/     # Bulk data fetching endpoint (optimized)
-│   │   └── original-image/      # Original image endpoints
-│   ├── dataset/                  # SLIC-processed wound data
-│   ├── dataset_reviewed/         # Human-reviewed corrections
-│   ├── images/                   # Original training images
-│   ├── dosage-supervision/        # PBM dosage labeling interface
-│   ├── grid/                     # Grid view page
-│   └── tissue_classification_model.pth  # Trained PyTorch model
+│   ├── api/                      # Rotas de API
+│   │   ├── cnn-predict/          # Endpoint de inferência CNN
+│   │   ├── data-files/           # Endpoints de arquivos de dados
+│   │   ├── data-files-bulk/      # Endpoint otimizado de carregamento em lote
+│   │   ├── data-files-sorted/    # Endpoints de arquivos ordenados/filtrados
+│   │   ├── dataset-statistics/   # Estatísticas do dataset
+│   │   ├── dosage-supervision/   # API do fluxo de supervisão de dosagem
+│   │   ├── supervision/          # Classificações SLIC/VLM (slic.csv, vlm.csv)
+│   │   ├── check-review/         # Verificação de revisões
+│   │   ├── save-review/          # Salvamento de revisões
+│   │   ├── upload/               # Upload de arquivos
+│   │   └── original-image/       # Endpoints de imagem original
+│   ├── data/                     # Dados de feridas processados pelo SLIC
+│   ├── dataset_reviewed/         # Correções revisadas por humanos
+│   ├── images/                   # Imagens originais de treinamento
+│   ├── inferences/               # Listagem de inferências (Supabase)
+│   ├── grid/                     # Página de visão em grade
+│   ├── dashboard/                # Painel de estatísticas
+│   ├── dosage-supervision/       # Interface de rotulagem de dosagem PBM
+│   ├── minimalistic-supervision/ # Versão enxuta da supervisão
+│   ├── minimalistic-supervision-v2/
+│   ├── pipeline-demo/            # Demonstração do pipeline
+│   ├── pwat/                     # Ferramenta de escores PWA
+│   ├── json-view/                # Visualizador de JSON
+│   ├── lista-avaliacoes/         # Lista de avaliações
+│   └── download/                 # Exportação de dados
 ├── components/
-│   ├── ui/                       # shadcn/ui components
-│   ├── wound-visualizer.tsx     # SLIC visualization component
-│   └── wound-visualizer-cnn.tsx # CNN visualization component
+│   ├── ui/                       # Componentes shadcn/ui
+│   ├── wound-visualizer.tsx      # Componente de visualização SLIC
+│   └── wound-visualizer-cnn.tsx  # Componente de visualização CNN
+├── lib/
+│   ├── dosage/                   # Atribuição de dosagem, demo e regras
+│   ├── types/                    # Definições de tipos TypeScript
+│   └── utils.ts                  # Utilitários gerais
 ├── scripts/
-│   ├── cnn_inference.py         # Python script for CNN inference
-│   └── requirements.txt         # Python dependencies
-└── lib/
-    ├── dosage/                   # Dosage assignment, demo, and rule helpers
-    └── types/                    # TypeScript type definitions
+│   ├── cnn_inference.py          # Script Python de inferência CNN
+│   ├── requirements.txt          # Dependências Python
+│   └── smoke-dosage-context.mjs  # Smoke test do contexto de dosagem
+└── supabase/                     # Migrações e configuração do Supabase
 ```
 
-## How It Works
+## Como funciona
 
-### SLIC Visualization (Default)
+### Visualização SLIC (padrão)
 
-The SLIC algorithm segments the wound image into superpixels and classifies them based on color analysis in multiple color spaces (CIELab, RGB, CMYK). Each cluster is assigned tissue type scores for:
-- **Necrosis** (black tissue)
-- **Slough** (yellow tissue)
-- **Red Tissue** (healthy granulation tissue)
+O algoritmo SLIC segmenta a imagem da ferida em superpixels e os classifica com base na análise de cor em múltiplos espaços de cor (CIELab, RGB, CMYK). Cada cluster recebe escores de tipo de tecido para:
 
-### CNN Visualization
+- **Necrose** (tecido negro)
+- **Slough** (tecido amarelo)
+- **Tecido vermelho** (tecido de granulação saudável)
 
-The CNN model refines the SLIC predictions using a dual-input architecture:
-1. **Full Image Pathway**: Captures global wound context
-2. **Cluster Mask Pathway**: Focuses on specific cluster features
-3. **SLIC Scores Input**: Uses initial SLIC predictions as additional features
+### Visualização CNN
 
-The model outputs refined tissue classification scores for each cluster, improving accuracy over the traditional SLIC approach.
+O modelo CNN refina as predições SLIC usando uma arquitetura de entrada dupla:
 
-**Performance Features:**
-- **Automatic Caching**: CNN predictions are cached after first run for instant subsequent loading
-- **Manual Refresh**: Use the refresh button to re-run inference and update cache
-- **Cache Indicator**: "Cached" badge shows when predictions are loaded from cache
+1. **Caminho da imagem completa**: captura o contexto global da ferida.
+2. **Caminho da máscara de cluster**: foca nas características específicas do cluster.
+3. **Entrada de escores SLIC**: usa as predições iniciais do SLIC como características adicionais.
 
-## Model Training
+O modelo gera escores refinados de classificação de tecido para cada cluster, melhorando a acurácia em relação à abordagem SLIC tradicional.
 
-The CNN model was trained on wound images with human-reviewed corrections. For training details, see the `cnn_finetuning.py` script in the parent repository.
+**Recursos de desempenho:**
 
-Model architecture:
-- Input: 64x64 RGB images (full + cluster mask) + SLIC scores
-- Dual convolutional pathways with batch normalization
-- Fully connected layers with dropout regularization
-- Output: 3 tissue type scores (necrosis, slough, red_tissue)
+- **Cache automático**: as predições CNN são cacheadas após a primeira execução.
+- **Atualização manual**: use o botão de atualizar para reexecutar a inferência.
+- **Indicador de cache**: o selo "Cached" mostra quando veio do cache.
 
-## Usage
+## Treinamento do modelo
 
-### Detail View (Main Page)
+O modelo CNN foi treinado em imagens de feridas com correções revisadas por humanos. Para detalhes de treinamento, veja o script `cnn_finetuning.py` no repositório pai.
 
-1. **Select a data file** from the dropdown menu
-2. **Choose prediction method**:
-   - SLIC Algorithm: Fast, traditional approach
-   - CNN Model: More accurate predictions (first run may be slow, subsequent runs are cached)
-3. **Interact with the visualization**:
-   - Click on clusters to select them
-   - Hover over clusters to highlight them
-   - Toggle overlay opacity to see the underlying image
-   - Switch between segmented and original views
-4. **Review and correct** (SLIC mode only):
-   - Adjust tissue scores using sliders
-   - Save corrections for model training
-5. **Cache management** (CNN mode):
-   - Predictions are automatically cached for fast reloading
-   - Click refresh button to re-run inference and update cache
-   - Look for "Cached" badge to see if predictions were loaded from cache
-6. **Track reviewed samples**:
-   - Click "Mark as Seen" to mark current file as reviewed
-   - Random selector will prioritize unseen files
-   - "Seen" badge appears on reviewed files
-   - Click "Clear Seen (X)" to reset all seen markers
-   - Hover over random button to see remaining unseen count
-7. **Filter and sort files**:
-   - Click filter button to sort by tissue type
-   - "Most Necrosis" - Shows wounds with highest black tissue percentage
-   - "Most Slough" - Shows wounds with highest yellow tissue percentage
-   - "Most Red Tissue" - Shows wounds with highest healthy tissue percentage
-   - "No Filter" - Returns to default alphabetical order
+Arquitetura:
 
-### Grid View
+- Entrada: imagens RGB 64x64 (completa + máscara de cluster) + escores SLIC
+- Caminhos convolucionais duplos com batch normalization
+- Camadas totalmente conectadas com dropout
+- Saída: 3 escores de tipo de tecido (necrose, slough, tecido_vermelho)
 
-1. **Access grid view**: Click "Grid View" button in the main page header
-2. **Browse samples**: View wound samples in a paginated grid layout (24 samples per page)
-3. **View information**: Each card shows:
-   - Original wound image
-   - Sample filename
-   - Tissue composition percentages (necrosis, slough, red tissue)
-   - Review and seen status badges
-4. **Hover to see analysis**: Hover over any card to switch from original image to segmented view with tissue overlay
-5. **Navigate to details**: Click any sample card to view detailed analysis
-6. **Filter samples**: Use the filter dropdown to sort by tissue composition (same as detail view)
-7. **Pagination**: 
-   - Navigate using Previous/Next buttons
-   - Jump directly to any page using the page selector dropdown
-   - Pagination controls available at both top and bottom of the page
+## Uso
 
-### Dosage Supervision
+### Visão detalhada (página principal)
 
-Open `/dosage-supervision` to label photobiomodulation dosage decisions for wound cases.
+1. **Selecione um arquivo de dados** no menu suspenso.
+2. **Escolha o método de predição**: SLIC (rápido) ou CNN (mais preciso, com cache).
+3. **Interaja com a visualização**: clique/hover nos clusters, alterne opacidade e views.
+4. **Revise e corrija** (modo SLIC): ajuste escores e salve correções.
+5. **Gerencie o cache** (modo CNN): atualize para reexecutar inferência.
+6. **Rastreie amostras vistas**: "Marcar como visto", seletor aleatório prioriza não vistas.
+7. **Filtre e ordene**: por necrose, slough ou tecido vermelho.
 
-The workflow assigns each image across three presentation modes:
+### Visão em grade
 
-- `blind`: image-only labeling.
-- `context`: labeling with derived wound context.
-- `suggestion_review`: labeling with context plus a rule-based dosage suggestion.
+1. Acesse via botão "Grid View".
+2. Navegue em páginas de 24 amostras.
+3. Cada card mostra imagem, nome, composição de tecido e badges de status.
+4. Hover alterna para a visão segmentada.
+5. Clique para abrir a análise detalhada.
 
-Assignments come from the full image list in `app/data/images_list.json`, so the module can be used across the datasets already present in the repository. Case context is enriched from the existing classification outputs in `app/api/supervision/slic.csv` and `app/api/supervision/vlm.csv` when matching rows exist. If an assigned image has no classification row yet, the API returns production metadata showing classification availability as false and the suggestion falls back to `not_sure` instead of using mock data.
+### Supervisão de dosagem
 
-Labels are stored in the Supabase table `public.dosage_feedback`. The app uses these API routes:
+Abra `/dosage-supervision` para rotular decisões de dosagem de fotobiomodulação.
 
-- `/api/dosage-supervision/list-cases`: picks the next assignment for a user.
-- `/api/dosage-supervision/case-context`: loads SLIC/VLM-derived context and optional rule suggestions.
-- `/api/dosage-supervision/save-label`: saves dosage decisions and selected laser doses.
-- `/api/dosage-supervision/skip-case`: records skipped assignments.
+O fluxo atribui cada imagem em três modos de apresentação:
 
-The reusable context adapter lives in `lib/dosage/context.ts`. Run this smoke check after changing dataset naming, CSV formats, or dosage context rules:
+- `blind`: rotulagem apenas com a imagem.
+- `context`: rotulagem com contexto de ferida derivado.
+- `suggestion_review`: rotulagem com contexto + sugestão de dosagem baseada em regras.
+
+As atribuições vêm da lista completa em `app/data/images_list.json`. O contexto do caso é enriquecido a partir das saídas de classificação em `app/api/supervision/slic.csv` e `app/api/supervision/vlm.csv`. Se uma imagem não tiver linha de classificação, a API retorna metadados de produção com disponibilidade falsa e a sugestão cai para `not_sure`.
+
+Os rótulos são armazenados na tabela `public.dosage_feedback` do Supabase. Rotas usadas:
+
+- `/api/dosage-supervision/list-cases`: seleciona a próxima atribuição.
+- `/api/dosage-supervision/case-context`: carrega contexto SLIC/VLM e sugestões.
+- `/api/dosage-supervision/save-label`: salva decisões e doses de laser.
+- `/api/dosage-supervision/skip-case`: registra atribuições puladas.
+
+O adaptador de contexto reutilizável está em `lib/dosage/context.ts`. Rode o smoke test após mudar nomes de datasets, formatos de CSV ou regras de contexto:
 
 ```bash
 npm run smoke:dosage-context
 ```
 
-#### Supabase Setup
+#### Configuração do Supabase
 
-Run the migration SQL in Supabase SQL Editor before using the real dosage workflow:
+Execute o SQL de migração no SQL Editor do Supabase antes de usar o fluxo real:
 
 ```sql
 create table if not exists public.dosage_feedback (
@@ -277,15 +284,20 @@ create index if not exists dosage_feedback_image_idx
   on public.dosage_feedback (image_name);
 ```
 
-The public `select` policy is required by the current app because assignment selection checks prior labels for the entered user. For public deployments, consider moving dosage writes and reads behind server-only service-role endpoints and tightening RLS.
+A política pública de `select` é exigida pelo app atual porque a seleção de atribuição verifica rótulos anteriores do usuário. Para implantações públicas, considere mover as escritas/leituras de dosagem para endpoints server-only com service-role e reforçar o RLS.
 
-## Learn More
+## Scripts disponíveis
 
-### Next.js
+| Script | Descrição |
+| --- | --- |
+| `npm run dev` | Servidor de desenvolvimento (Turbopack) |
+| `npm run build` | Build de produção |
+| `npm run start` | Inicia o build de produção |
+| `npm run lint` | Lint com ESLint |
+| `npm run smoke:dosage-context` | Smoke test do contexto de dosagem |
 
-To learn more about Next.js, take a look at the following resources:
+## Saiba mais
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [Documentação do Next.js](https://nextjs.org/docs)
+- [Aprenda Next.js](https://nextjs.org/learn)
+- [Repositório GitHub do Next.js](https://github.com/vercel/next.js)
